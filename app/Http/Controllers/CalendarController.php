@@ -62,6 +62,8 @@ class CalendarController extends Controller
                 'ends_at' => $event->ends_at->toIso8601String(),
                 'timezone' => $event->timezone,
                 'location' => $event->location,
+                'source_app' => $event->source_app,
+                'source_url' => $event->source_url,
             ])
             ->values();
 

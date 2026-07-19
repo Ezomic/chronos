@@ -5,7 +5,8 @@ import {
     parseAbsolute,
     toCalendarDate,
 } from '@internationalized/date';
-import { reactive, ref, watch } from 'vue';
+import { ExternalLink } from '@lucide/vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,6 +18,7 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet';
+import { sourceLink } from '@/lib/eventSource';
 import { destroy, store, update } from '@/routes/events';
 import type { CalendarEvent, WritableCalendar } from '@/types/calendar';
 
@@ -51,6 +53,8 @@ const form = reactive<FormState>({
 
 const errors = ref<Record<string, string>>({});
 const processing = ref(false);
+
+const source = computed(() => (props.event ? sourceLink(props.event) : null));
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -199,6 +203,15 @@ function remove(): void {
                 class="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-2"
                 @submit.prevent="submit"
             >
+                <a
+                    v-if="source"
+                    :href="source.href"
+                    class="flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-primary hover:bg-accent"
+                >
+                    <ExternalLink class="size-4" />
+                    {{ source.label }}
+                </a>
+
                 <div class="grid gap-2">
                     <Label for="title">Title</Label>
                     <Input id="title" v-model="form.title" required autofocus />

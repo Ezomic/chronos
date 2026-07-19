@@ -12,6 +12,10 @@ export interface CalendarEvent {
     /** IANA zone the event was authored in. */
     timezone: string;
     location: string | null;
+    /** The app this event was created from, if any (e.g. "zero"). */
+    source_app: string | null;
+    /** Deep link back to the originating record in that app. */
+    source_url: string | null;
 }
 
 export interface WritableCalendar {

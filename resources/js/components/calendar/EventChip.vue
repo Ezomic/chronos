@@ -1,11 +1,15 @@
 <script setup lang="ts">
+import { Mail } from '@lucide/vue';
 import { computed } from 'vue';
 import { formatEventTime } from '@/composables/useCalendarGrid';
+import { sourceLink } from '@/lib/eventSource';
 import type { CalendarEvent } from '@/types/calendar';
 
 const props = defineProps<{ event: CalendarEvent }>();
 
 const time = computed(() => formatEventTime(props.event));
+const fromMail = computed(() => props.event.source_app === 'zero');
+const source = computed(() => sourceLink(props.event));
 </script>
 
 <template>
@@ -20,6 +24,10 @@ const time = computed(() => formatEventTime(props.event));
         <span v-if="time" class="shrink-0 text-muted-foreground tabular-nums">
             {{ time }}
         </span>
+        <Mail
+            v-if="fromMail && source"
+            class="size-3 shrink-0 text-muted-foreground"
+        />
         <span class="truncate">{{ event.title }}</span>
     </div>
 </template>
