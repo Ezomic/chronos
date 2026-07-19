@@ -1,0 +1,48 @@
+name: Deploy to production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            cd /home/deploy/chronos
+            php artisan down --retry=15
+            git fetch origin
+            git reset --hard origin/main
+            composer install --no-dev --optimize-autoloader --no-interaction
+            # Clear the previous deploy's caches before building. Wayfinder codegen
+            # (npm run build) introspects routes, so stale cached routes would omit
+            # any newly added route/controller and break the frontend build.
+            php artisan optimize:clear
+            npm ci
+            npm run build
+            php artisan migrate --force
+            chmod 664 database/database.sqlite database/database.sqlite-wal database/database.sqlite-shm 2>/dev/null || true
+            chgrp www-data database/database.sqlite database/database.sqlite-wal database/database.sqlite-shm 2>/dev/null || true
+            # setgid on database/: the scheduler runs as deploy, not www-data, so a
+            # WAL/SHM file it recreates would land group=deploy and be unwritable by
+            # PHP-FPM (www-data). This is the THI-298 failure mode from zero/mail-app.
+            chmod g+s database
+            # Rebuild config/route/view cache from the new code. Without this the
+            # old cache persists and the fpm reload below just reloads stale routes.
+            php artisan optimize
+            sudo /bin/systemctl reload php8.4-fpm
+            php artisan up
+            sudo /usr/bin/supervisorctl restart chronos-scheduler:*
