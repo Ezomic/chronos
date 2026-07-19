@@ -2,6 +2,7 @@ export interface CalendarEvent {
     id: number;
     calendar_id: number;
     title: string;
+    description: string | null;
     color: string;
     all_day: boolean;
     /** ISO 8601 UTC instant. */
@@ -11,4 +12,11 @@ export interface CalendarEvent {
     /** IANA zone the event was authored in. */
     timezone: string;
     location: string | null;
+}
+
+export interface WritableCalendar {
+    id: number;
+    name: string;
+    color: string;
+    is_default: boolean;
 }
