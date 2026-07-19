@@ -18,12 +18,23 @@ class CalendarController extends Controller
      * and there's no client-side event store to fall out of sync. Only events
      * overlapping the visible window are returned.
      */
+    private const VIEWS = ['month', 'week', 'day'];
+
     public function index(Request $request): Response
     {
+        $view = $request->string('view')->toString();
+        $view = in_array($view, self::VIEWS, true) ? $view : 'month';
+
         $anchor = $this->parseAnchor($request->string('date')->toString());
 
-        $gridStart = $anchor->startOfMonth()->startOfWeek(CarbonImmutable::MONDAY);
-        $gridEnd = $gridStart->addDays(42);
+        [$gridStart, $gridEnd] = match ($view) {
+            'week' => [$anchor->startOfWeek(CarbonImmutable::MONDAY), $anchor->startOfWeek(CarbonImmutable::MONDAY)->addDays(7)],
+            'day' => [$anchor, $anchor->addDay()],
+            default => [
+                $anchor->startOfMonth()->startOfWeek(CarbonImmutable::MONDAY),
+                $anchor->startOfMonth()->startOfWeek(CarbonImmutable::MONDAY)->addDays(42),
+            ],
+        };
 
         // Pad a day each side so an event near a boundary is never dropped by a
         // timezone offset between storage (UTC) and the viewer's zone.
@@ -62,7 +73,7 @@ class CalendarController extends Controller
             ->values();
 
         return Inertia::render('calendar/Index', [
-            'view' => 'month',
+            'view' => $view,
             'date' => $anchor->toDateString(),
             'events' => $events,
             'calendars' => $calendars,

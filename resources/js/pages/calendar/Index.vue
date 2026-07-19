@@ -1,11 +1,18 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { getLocalTimeZone, parseDate, today } from '@internationalized/date';
+import {
+    getLocalTimeZone,
+    parseDate,
+    startOfWeek,
+    today,
+} from '@internationalized/date';
 import { ChevronLeft, ChevronRight, Plus } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import EventSheet from '@/components/calendar/EventSheet.vue';
 import MonthGrid from '@/components/calendar/MonthGrid.vue';
+import WeekGrid from '@/components/calendar/WeekGrid.vue';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { index as calendarIndex } from '@/routes/calendar';
 import type { CalendarEvent, WritableCalendar } from '@/types/calendar';
 
@@ -41,48 +48,106 @@ defineOptions({
 const anchor = computed(() => parseDate(props.date));
 const todayKey = computed(() => today(getLocalTimeZone()).toString());
 
-const monthLabel = computed(() =>
-    new Intl.DateTimeFormat('en-US', {
+const asDate = (d: { year: number; month: number; day: number }) =>
+    new Date(d.year, d.month - 1, d.day);
+
+const heading = computed(() => {
+    const a = anchor.value;
+
+    if (props.view === 'day') {
+        return new Intl.DateTimeFormat('en-US', {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+        }).format(asDate(a));
+    }
+
+    if (props.view === 'week') {
+        const monday = startOfWeek(a, 'nl-NL');
+        const sunday = monday.add({ days: 6 });
+        const fmt = new Intl.DateTimeFormat('en-US', {
+            month: 'short',
+            day: 'numeric',
+        });
+
+        return `${fmt.format(asDate(monday))} – ${fmt.format(asDate(sunday))}, ${sunday.year}`;
+    }
+
+    return new Intl.DateTimeFormat('en-US', {
         month: 'long',
         year: 'numeric',
-    }).format(new Date(anchor.value.year, anchor.value.month - 1, 1)),
-);
+    }).format(asDate(a));
+});
 
-const prevMonth = computed(() =>
-    anchor.value.set({ day: 1 }).subtract({ months: 1 }).toString(),
-);
-const nextMonth = computed(() =>
-    anchor.value.set({ day: 1 }).add({ months: 1 }).toString(),
-);
+const step = (direction: 1 | -1) => {
+    const a = anchor.value;
+    const moved =
+        props.view === 'day'
+            ? a.add({ days: direction })
+            : props.view === 'week'
+              ? a.add({ weeks: direction })
+              : a.set({ day: 1 }).add({ months: direction });
 
-const hrefFor = (date: string) => calendarIndex({ query: { date } });
+    return moved.toString();
+};
+
+const prev = computed(() => step(-1));
+const next = computed(() => step(1));
+
+const hrefFor = (date: string) =>
+    calendarIndex({ query: { view: props.view, date } });
+
+const viewHref = (view: string) =>
+    calendarIndex({ query: { view, date: props.date } });
+
+const views = [
+    { key: 'month', label: 'Month' },
+    { key: 'week', label: 'Week' },
+    { key: 'day', label: 'Day' },
+];
 </script>
 
 <template>
     <Head title="Calendar" />
 
     <div class="flex h-full flex-1 flex-col gap-4 p-4">
-        <div class="flex items-center justify-between">
-            <h1 class="text-xl font-semibold">{{ monthLabel }}</h1>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+            <h1 class="text-xl font-semibold">{{ heading }}</h1>
 
             <div class="flex items-center gap-2">
+                <div class="flex items-center rounded-md border p-0.5">
+                    <Button
+                        v-for="option in views"
+                        :key="option.key"
+                        variant="ghost"
+                        size="sm"
+                        as-child
+                        :class="
+                            cn(
+                                'h-7',
+                                props.view === option.key &&
+                                    'bg-accent text-accent-foreground',
+                            )
+                        "
+                    >
+                        <Link :href="viewHref(option.key)">{{
+                            option.label
+                        }}</Link>
+                    </Button>
+                </div>
+
                 <Button variant="outline" size="sm" as-child>
                     <Link :href="hrefFor(todayKey)">Today</Link>
                 </Button>
                 <div class="flex items-center">
                     <Button variant="ghost" size="icon" as-child>
-                        <Link
-                            :href="hrefFor(prevMonth)"
-                            aria-label="Previous month"
-                        >
+                        <Link :href="hrefFor(prev)" aria-label="Previous">
                             <ChevronLeft class="size-4" />
                         </Link>
                     </Button>
                     <Button variant="ghost" size="icon" as-child>
-                        <Link
-                            :href="hrefFor(nextMonth)"
-                            aria-label="Next month"
-                        >
+                        <Link :href="hrefFor(next)" aria-label="Next">
                             <ChevronRight class="size-4" />
                         </Link>
                     </Button>
@@ -95,7 +160,17 @@ const hrefFor = (date: string) => calendarIndex({ query: { date } });
         </div>
 
         <MonthGrid
+            v-if="props.view === 'month'"
             :anchor="props.date"
+            :events="props.events"
+            :today="todayKey"
+            @select-day="openCreate"
+            @select-event="openEvent"
+        />
+        <WeekGrid
+            v-else
+            :anchor="props.date"
+            :view="props.view"
             :events="props.events"
             :today="todayKey"
             @select-day="openCreate"
