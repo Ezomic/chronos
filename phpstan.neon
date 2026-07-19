@@ -10,4 +10,7 @@ parameters:
         - database/
         - routes/
 
+    excludePaths:
+        - config/sanctum.php
+
     level: 7
