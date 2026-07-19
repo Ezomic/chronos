@@ -101,6 +101,8 @@ it('stores an all-day event as an exclusive midnight-UTC span', function () {
 
 it('returns 422 when the user has no writable calendar', function () {
     $user = User::factory()->create();
+    // Users are provisioned with a default calendar; remove it to exercise the guard.
+    $user->calendars()->delete();
     Sanctum::actingAs($user, ['events:create']);
 
     $this->postJson('/api/events', [
