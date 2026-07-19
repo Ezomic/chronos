@@ -33,6 +33,8 @@ class UpdateEventRequest extends FormRequest
             'timezone' => ['nullable', 'timezone:all'],
             'starts_at' => ['required', 'date'],
             'ends_at' => ['required', 'date', $this->boolean('all_day') ? 'after_or_equal:starts_at' : 'after:starts_at'],
+            'frequency' => ['nullable', Rule::in(['none', 'daily', 'weekly', 'monthly', 'yearly'])],
+            'until' => ['nullable', 'date', 'after_or_equal:starts_at'],
         ];
     }
 }

@@ -10,11 +10,20 @@ use App\Http\Requests\StoreEventRequest;
 use App\Http\Requests\UpdateEventRequest;
 use App\Models\Calendar;
 use App\Models\Event;
+use Carbon\CarbonImmutable;
+use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\RedirectResponse;
 
 class EventController extends Controller
 {
     use ResolvesEventTimes;
+
+    private const FREQUENCIES = [
+        'daily' => 'DAILY',
+        'weekly' => 'WEEKLY',
+        'monthly' => 'MONTHLY',
+        'yearly' => 'YEARLY',
+    ];
 
     public function store(StoreEventRequest $request, CreateEventAction $action): RedirectResponse
     {
@@ -36,6 +45,7 @@ class EventController extends Controller
             timezone: $timezone,
             description: $request->input('description'),
             location: $request->input('location'),
+            rrule: $this->buildRrule($request, $timezone),
         );
 
         return back();
@@ -63,6 +73,7 @@ class EventController extends Controller
             'ends_at' => $endsAt,
             'all_day' => $request->boolean('all_day'),
             'timezone' => $timezone,
+            'rrule' => $this->buildRrule($request, $timezone),
         ])->save();
 
         return back();
@@ -75,5 +86,32 @@ class EventController extends Controller
         $event->delete();
 
         return back();
+    }
+
+    /**
+     * Build an RRULE string from the request's recurrence fields, or null when
+     * the event doesn't repeat. UNTIL is stored as an inclusive end-of-day UTC
+     * timestamp.
+     */
+    private function buildRrule(FormRequest $request, string $timezone): ?string
+    {
+        $frequency = $request->string('frequency')->toString();
+
+        if (! array_key_exists($frequency, self::FREQUENCIES)) {
+            return null;
+        }
+
+        $rrule = 'FREQ='.self::FREQUENCIES[$frequency];
+
+        if ($request->filled('until')) {
+            $until = CarbonImmutable::parse($request->string('until')->toString(), $timezone)
+                ->endOfDay()
+                ->utc()
+                ->format('Ymd\THis\Z');
+
+            $rrule .= ';UNTIL='.$until;
+        }
+
+        return $rrule;
     }
 }

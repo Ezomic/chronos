@@ -5,13 +5,17 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\Event;
+use App\Services\Calendar\RecurrenceExpander;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class CalendarController extends Controller
 {
+    public function __construct(private readonly RecurrenceExpander $expander) {}
+
     /**
      * Render the calendar. The view and anchor date live in the URL
      * (?view=month&date=YYYY-MM-DD) so navigation is a normal Inertia visit
@@ -41,31 +45,41 @@ class CalendarController extends Controller
         $from = $gridStart->subDay();
         $to = $gridEnd->addDay();
 
-        $events = Event::query()
-            ->whereHas('calendar', function ($query) use ($request): void {
-                $query->where('user_id', $request->user()->id)
-                    ->where('is_visible', true);
-            })
+        $ownedVisible = fn ($query) => $query
+            ->where('user_id', $request->user()->id)
+            ->where('is_visible', true);
+
+        // Non-recurring events overlapping the window.
+        $single = Event::query()
+            ->whereHas('calendar', $ownedVisible)
+            ->whereNull('rrule')
             ->where('starts_at', '<', $to)
             ->where('ends_at', '>', $from)
             ->with('calendar:id,color')
-            ->orderBy('starts_at')
-            ->get()
-            ->map(fn (Event $event): array => [
-                'id' => $event->id,
-                'calendar_id' => $event->calendar_id,
-                'title' => $event->title,
-                'description' => $event->description,
-                'color' => $event->calendar->color,
-                'all_day' => $event->all_day,
-                'starts_at' => $event->starts_at->toIso8601String(),
-                'ends_at' => $event->ends_at->toIso8601String(),
-                'timezone' => $event->timezone,
-                'location' => $event->location,
-                'source_app' => $event->source_app,
-                'source_url' => $event->source_url,
-            ])
-            ->values();
+            ->get();
+
+        // Recurring masters whose series could produce an occurrence in the
+        // window (anchored before the window ends); expanded below.
+        $recurring = Event::query()
+            ->whereHas('calendar', $ownedVisible)
+            ->whereNotNull('rrule')
+            ->where('starts_at', '<', $to)
+            ->with('calendar:id,color')
+            ->get();
+
+        $events = collect();
+
+        foreach ($single as $event) {
+            $events->push($this->serializeOccurrence($event, $event->starts_at, $event->ends_at));
+        }
+
+        foreach ($recurring as $master) {
+            foreach ($this->expander->expand($master, $from, $to) as $occurrence) {
+                $events->push($this->serializeOccurrence($master, $occurrence['starts_at'], $occurrence['ends_at']));
+            }
+        }
+
+        $events = $events->sortBy('starts_at')->values();
 
         $calendars = $request->user()->calendars()
             ->where('is_writable', true)
@@ -80,6 +94,33 @@ class CalendarController extends Controller
             'events' => $events,
             'calendars' => $calendars,
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializeOccurrence(Event $event, CarbonInterface $startsAt, CarbonInterface $endsAt): array
+    {
+        return [
+            // Unique per occurrence so repeated instances don't collide as keys.
+            'key' => $event->id.'|'.$startsAt->toIso8601String(),
+            'id' => $event->id,
+            'calendar_id' => $event->calendar_id,
+            'title' => $event->title,
+            'description' => $event->description,
+            'color' => $event->calendar->color,
+            'all_day' => $event->all_day,
+            'starts_at' => $startsAt->toIso8601String(),
+            'ends_at' => $endsAt->toIso8601String(),
+            'timezone' => $event->timezone,
+            'location' => $event->location,
+            'source_app' => $event->source_app,
+            'source_url' => $event->source_url,
+            'rrule' => $event->rrule,
+            // The series anchor (for editing the whole series), null when single.
+            'series_starts_at' => $event->rrule ? $event->starts_at->toIso8601String() : null,
+            'series_ends_at' => $event->rrule ? $event->ends_at->toIso8601String() : null,
+        ];
     }
 
     private function parseAnchor(string $date): CarbonImmutable

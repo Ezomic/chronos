@@ -26,6 +26,7 @@ class CreateEventAction
         ?string $description = null,
         ?string $location = null,
         ?EventSource $source = null,
+        ?string $rrule = null,
     ): Event {
         $event = new Event;
 
@@ -38,6 +39,7 @@ class CreateEventAction
             'ends_at' => $endsAt,
             'all_day' => $allDay,
             'timezone' => $timezone,
+            'rrule' => $rrule,
             'source_app' => $source?->app,
             'source_type' => $source?->type,
             'source_id' => $source?->id,
