@@ -214,7 +214,7 @@ const hasAllDay = computed(() =>
                 >
                     <button
                         v-for="event in column.allDay"
-                        :key="event.id"
+                        :key="event.key"
                         type="button"
                         class="flex items-center gap-1 truncate rounded px-1 py-0.5 text-left text-xs hover:opacity-80"
                         :style="{
@@ -267,7 +267,7 @@ const hasAllDay = computed(() =>
 
                     <button
                         v-for="block in column.blocks"
-                        :key="block.event.id"
+                        :key="block.event.key"
                         type="button"
                         class="absolute overflow-hidden rounded px-1 py-0.5 text-left text-xs hover:opacity-90"
                         :style="{

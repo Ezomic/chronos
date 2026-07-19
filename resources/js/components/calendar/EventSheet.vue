@@ -39,6 +39,8 @@ interface FormState {
     all_day: boolean;
     start: string;
     end: string;
+    frequency: string;
+    until: string;
 }
 
 const form = reactive<FormState>({
@@ -49,7 +51,41 @@ const form = reactive<FormState>({
     all_day: false,
     start: '',
     end: '',
+    frequency: 'none',
+    until: '',
 });
+
+const repeatOptions = [
+    { value: 'none', label: 'Does not repeat' },
+    { value: 'daily', label: 'Daily' },
+    { value: 'weekly', label: 'Weekly' },
+    { value: 'monthly', label: 'Monthly' },
+    { value: 'yearly', label: 'Yearly' },
+];
+
+const FREQ_MAP: Record<string, string> = {
+    DAILY: 'daily',
+    WEEKLY: 'weekly',
+    MONTHLY: 'monthly',
+    YEARLY: 'yearly',
+};
+
+function parseRrule(rrule: string | null): {
+    frequency: string;
+    until: string;
+} {
+    if (!rrule) {
+        return { frequency: 'none', until: '' };
+    }
+
+    const freq = rrule.match(/FREQ=(\w+)/);
+    const until = rrule.match(/UNTIL=(\d{4})(\d{2})(\d{2})/);
+
+    return {
+        frequency: (freq && FREQ_MAP[freq[1]]) || 'none',
+        until: until ? `${until[1]}-${until[2]}-${until[3]}` : '',
+    };
+}
 
 const errors = ref<Record<string, string>>({});
 const processing = ref(false);
@@ -77,16 +113,22 @@ function hydrate(): void {
         form.location = e.location ?? '';
         form.all_day = e.all_day;
 
+        const recurrence = parseRrule(e.rrule);
+        form.frequency = recurrence.frequency;
+        form.until = recurrence.until;
+
+        // Editing a series edits its anchor, not the clicked occurrence.
+        const start = e.series_starts_at ?? e.starts_at;
+        const end = e.series_ends_at ?? e.ends_at;
+
         if (e.all_day) {
-            form.start = toCalendarDate(
-                parseAbsolute(e.starts_at, 'UTC'),
-            ).toString();
-            form.end = toCalendarDate(parseAbsolute(e.ends_at, 'UTC'))
+            form.start = toCalendarDate(parseAbsolute(start, 'UTC')).toString();
+            form.end = toCalendarDate(parseAbsolute(end, 'UTC'))
                 .subtract({ days: 1 })
                 .toString();
         } else {
-            form.start = localDateTime(e.starts_at, e.timezone);
-            form.end = localDateTime(e.ends_at, e.timezone);
+            form.start = localDateTime(start, e.timezone);
+            form.end = localDateTime(end, e.timezone);
         }
 
         return;
@@ -100,6 +142,8 @@ function hydrate(): void {
     form.all_day = false;
     form.start = `${date}T09:00`;
     form.end = `${date}T10:00`;
+    form.frequency = 'none';
+    form.until = '';
 }
 
 watch(
@@ -140,6 +184,8 @@ function payload() {
         timezone: form.all_day ? null : getLocalTimeZone(),
         starts_at: form.start,
         ends_at: form.end,
+        frequency: form.frequency,
+        until: form.frequency === 'none' ? null : form.until || null,
     };
 }
 
@@ -275,6 +321,31 @@ function remove(): void {
                 <p v-if="errors.ends_at" class="text-sm text-destructive">
                     {{ errors.ends_at }}
                 </p>
+
+                <div class="grid gap-2">
+                    <Label for="repeat">Repeat</Label>
+                    <select
+                        id="repeat"
+                        v-model="form.frequency"
+                        class="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs"
+                    >
+                        <option
+                            v-for="option in repeatOptions"
+                            :key="option.value"
+                            :value="option.value"
+                        >
+                            {{ option.label }}
+                        </option>
+                    </select>
+                </div>
+
+                <div v-if="form.frequency !== 'none'" class="grid gap-2">
+                    <Label for="until">Until (optional)</Label>
+                    <Input id="until" v-model="form.until" type="date" />
+                    <p v-if="errors.until" class="text-sm text-destructive">
+                        {{ errors.until }}
+                    </p>
+                </div>
 
                 <div class="grid gap-2">
                     <Label for="location">Location</Label>

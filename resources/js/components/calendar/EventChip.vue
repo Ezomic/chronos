@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Mail } from '@lucide/vue';
+import { Mail, Repeat } from '@lucide/vue';
 import { computed } from 'vue';
 import { formatEventTime } from '@/composables/useCalendarGrid';
 import { sourceLink } from '@/lib/eventSource';
@@ -26,6 +26,10 @@ const source = computed(() => sourceLink(props.event));
         </span>
         <Mail
             v-if="fromMail && source"
+            class="size-3 shrink-0 text-muted-foreground"
+        />
+        <Repeat
+            v-if="event.rrule"
             class="size-3 shrink-0 text-muted-foreground"
         />
         <span class="truncate">{{ event.title }}</span>
