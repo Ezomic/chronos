@@ -10,6 +10,11 @@ const props = defineProps<{
     today: string;
 }>();
 
+const emit = defineEmits<{
+    'select-day': [string];
+    'select-event': [CalendarEvent];
+}>();
+
 const { weeks } = useCalendarGrid(
     () => props.anchor,
     () => props.events,
@@ -41,11 +46,12 @@ const MAX_VISIBLE = 3;
                     :key="cell.key"
                     :class="
                         cn(
-                            'flex min-h-24 flex-col gap-0.5 border-t border-l p-1 first:border-l-0',
+                            'flex min-h-24 cursor-pointer flex-col gap-0.5 border-t border-l p-1 first:border-l-0 hover:bg-accent/40',
                             !cell.inCurrentMonth &&
                                 'bg-muted/30 text-muted-foreground',
                         )
                     "
+                    @click="emit('select-day', cell.key)"
                 >
                     <div class="flex justify-end">
                         <span
@@ -66,6 +72,8 @@ const MAX_VISIBLE = 3;
                             v-for="event in cell.events.slice(0, MAX_VISIBLE)"
                             :key="event.id"
                             :event="event"
+                            class="cursor-pointer"
+                            @click.stop="emit('select-event', event)"
                         />
                         <span
                             v-if="cell.events.length > MAX_VISIBLE"

@@ -1,18 +1,36 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
 import { getLocalTimeZone, parseDate, today } from '@internationalized/date';
-import { ChevronLeft, ChevronRight } from '@lucide/vue';
-import { computed } from 'vue';
+import { ChevronLeft, ChevronRight, Plus } from '@lucide/vue';
+import { computed, ref } from 'vue';
+import EventSheet from '@/components/calendar/EventSheet.vue';
 import MonthGrid from '@/components/calendar/MonthGrid.vue';
 import { Button } from '@/components/ui/button';
 import { index as calendarIndex } from '@/routes/calendar';
-import type { CalendarEvent } from '@/types/calendar';
+import type { CalendarEvent, WritableCalendar } from '@/types/calendar';
 
 const props = defineProps<{
     view: string;
     date: string;
     events: CalendarEvent[];
+    calendars: WritableCalendar[];
 }>();
+
+const sheetOpen = ref(false);
+const activeEvent = ref<CalendarEvent | null>(null);
+const activeDate = ref<string | null>(null);
+
+function openCreate(date: string | null = null): void {
+    activeEvent.value = null;
+    activeDate.value = date;
+    sheetOpen.value = true;
+}
+
+function openEvent(event: CalendarEvent): void {
+    activeEvent.value = event;
+    activeDate.value = null;
+    sheetOpen.value = true;
+}
 
 defineOptions({
     layout: {
@@ -69,6 +87,10 @@ const hrefFor = (date: string) => calendarIndex({ query: { date } });
                         </Link>
                     </Button>
                 </div>
+                <Button size="sm" @click="openCreate()">
+                    <Plus class="size-4" />
+                    New event
+                </Button>
             </div>
         </div>
 
@@ -76,6 +98,15 @@ const hrefFor = (date: string) => calendarIndex({ query: { date } });
             :anchor="props.date"
             :events="props.events"
             :today="todayKey"
+            @select-day="openCreate"
+            @select-event="openEvent"
+        />
+
+        <EventSheet
+            v-model:open="sheetOpen"
+            :event="activeEvent"
+            :default-date="activeDate"
+            :calendars="props.calendars"
         />
     </div>
 </template>
