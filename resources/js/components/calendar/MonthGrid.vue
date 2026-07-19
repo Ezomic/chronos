@@ -70,7 +70,7 @@ const MAX_VISIBLE = 3;
                     <div class="flex flex-col gap-0.5 overflow-hidden">
                         <EventChip
                             v-for="event in cell.events.slice(0, MAX_VISIBLE)"
-                            :key="event.id"
+                            :key="event.key"
                             :event="event"
                             class="cursor-pointer"
                             @click.stop="emit('select-event', event)"
