@@ -46,6 +46,9 @@ return [
         'client_secret' => env('MICROSOFT_CLIENT_SECRET'),
         'redirect' => env('MICROSOFT_REDIRECT_URI', '/auth/microsoft/callback'),
         'tenant' => env('MICROSOFT_TENANT', 'common'),
+        // IANA zone requested from Graph so mirrored Outlook events keep a
+        // real local zone instead of defaulting to UTC.
+        'timezone' => env('MICROSOFT_CALENDAR_TIMEZONE', 'Europe/Amsterdam'),
     ],
 
 ];
