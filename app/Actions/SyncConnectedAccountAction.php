@@ -9,6 +9,7 @@ use App\Models\ConnectedAccount;
 use App\Models\Event;
 use App\Services\Calendar\CalendarSource;
 use App\Services\Calendar\GoogleCalendarService;
+use App\Services\Calendar\MicrosoftCalendarService;
 use App\Services\Calendar\OAuthTokenRefresher;
 use Carbon\CarbonImmutable;
 use RuntimeException;
@@ -18,6 +19,7 @@ class SyncConnectedAccountAction
     public function __construct(
         private readonly OAuthTokenRefresher $refresher,
         private readonly GoogleCalendarService $google,
+        private readonly MicrosoftCalendarService $microsoft,
     ) {}
 
     public function handle(ConnectedAccount $account): void
@@ -52,6 +54,7 @@ class SyncConnectedAccountAction
     {
         return match ($account->provider) {
             ConnectedAccount::PROVIDER_GOOGLE => $this->google,
+            ConnectedAccount::PROVIDER_MICROSOFT => $this->microsoft,
             default => throw new RuntimeException("No calendar source for provider {$account->provider}."),
         };
     }
