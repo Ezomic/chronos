@@ -5,6 +5,7 @@ use App\Models\Calendar;
 use App\Models\ConnectedAccount;
 use App\Models\Event;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 
 function microsoftAccount(): ConnectedAccount
@@ -77,6 +78,34 @@ it('reads events from calendarView, which expands recurrence', function () {
 
     $calendar = Calendar::query()->where('connected_account_id', $account->id)->firstOrFail();
     expect(Event::where('calendar_id', $calendar->id)->count())->toBe(3);
+});
+
+it('requests a local timezone and stores mirrored events in it', function () {
+    config()->set('services.microsoft.timezone', 'Europe/Amsterdam');
+    $base = CarbonImmutable::now()->addDays(5);
+
+    Http::fake([
+        '*/me/calendars' => Http::response(graphCalendars()),
+        '*/calendarView*' => Http::response(['value' => [
+            [
+                'id' => 'tz-1', 'subject' => 'Local time',
+                'isAllDay' => false,
+                // Graph echoes the requested IANA zone and returns times in it.
+                'start' => ['dateTime' => $base->format('Y-m-d').'T09:00:00.0000000', 'timeZone' => 'Europe/Amsterdam'],
+                'end' => ['dateTime' => $base->format('Y-m-d').'T09:30:00.0000000', 'timeZone' => 'Europe/Amsterdam'],
+            ],
+        ]]),
+    ]);
+
+    syncMs(microsoftAccount());
+
+    $event = Event::query()->where('external_id', 'tz-1')->firstOrFail();
+    expect($event->timezone)->toBe('Europe/Amsterdam')
+        // 09:00 Amsterdam (+02:00) is 07:00 UTC.
+        ->and($event->starts_at->utc()->format('H:i'))->toBe('07:00');
+
+    Http::assertSent(fn (Request $request) => str_contains($request->url(), 'calendarView')
+        && $request->header('Prefer')[0] === 'outlook.timezone="Europe/Amsterdam"');
 });
 
 it('maps an all-day Microsoft event to a midnight-UTC span', function () {
