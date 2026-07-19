@@ -60,6 +60,12 @@ class ConnectedAccount extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function tokenIsExpired(): bool
+    {
+        return $this->oauth_expires_at === null
+            || $this->oauth_expires_at->subMinute()->isPast();
+    }
+
     /**
      * @return HasMany<Calendar, $this>
      */
