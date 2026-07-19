@@ -12,8 +12,9 @@ use Illuminate\Support\Facades\Http;
  *
  * Events are read via /calendarView, which expands recurrence into instances.
  * The plain /events endpoint does NOT expand recurrence — this is the common
- * trap. Graph returns times in UTC by default, so instants are stored exactly;
- * we keep the timeZone Graph reports (usually 'UTC').
+ * trap. A Prefer: outlook.timezone header requests times in a configured IANA
+ * zone (config services.microsoft.timezone), which Graph echoes back in
+ * start.timeZone — so mirrored events keep a real local zone instead of UTC.
  */
 class MicrosoftCalendarService implements CalendarSource
 {
@@ -55,15 +56,22 @@ class MicrosoftCalendarService implements CalendarSource
      */
     public function events(string $accessToken, string $calendarId, CarbonImmutable $from, CarbonImmutable $to): array
     {
-        $response = Http::withToken($accessToken)->get(
-            self::BASE.'/me/calendars/'.rawurlencode($calendarId).'/calendarView',
-            [
-                'startDateTime' => $from->toIso8601String(),
-                'endDateTime' => $to->toIso8601String(),
-                '$top' => 1000,
-                '$orderby' => 'start/dateTime',
-            ],
-        );
+        // Ask Graph to return times in a real IANA zone (it accepts IANA names
+        // and echoes them back in start.timeZone) so mirrored events keep a
+        // local zone instead of the UTC default.
+        $timezone = (string) config('services.microsoft.timezone', 'UTC');
+
+        $response = Http::withToken($accessToken)
+            ->withHeaders(['Prefer' => "outlook.timezone=\"{$timezone}\""])
+            ->get(
+                self::BASE.'/me/calendars/'.rawurlencode($calendarId).'/calendarView',
+                [
+                    'startDateTime' => $from->toIso8601String(),
+                    'endDateTime' => $to->toIso8601String(),
+                    '$top' => 1000,
+                    '$orderby' => 'start/dateTime',
+                ],
+            );
         $response->throw();
 
         $items = $response->json('value', []);
