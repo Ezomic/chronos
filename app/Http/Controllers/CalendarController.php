@@ -44,6 +44,7 @@ class CalendarController extends Controller
                 'id' => $event->id,
                 'calendar_id' => $event->calendar_id,
                 'title' => $event->title,
+                'description' => $event->description,
                 'color' => $event->calendar->color,
                 'all_day' => $event->all_day,
                 'starts_at' => $event->starts_at->toIso8601String(),
@@ -53,10 +54,18 @@ class CalendarController extends Controller
             ])
             ->values();
 
+        $calendars = $request->user()->calendars()
+            ->where('is_writable', true)
+            ->orderByDesc('is_default')
+            ->orderBy('name')
+            ->get(['id', 'name', 'color', 'is_default'])
+            ->values();
+
         return Inertia::render('calendar/Index', [
             'view' => 'month',
             'date' => $anchor->toDateString(),
             'events' => $events,
+            'calendars' => $calendars,
         ]);
     }
 

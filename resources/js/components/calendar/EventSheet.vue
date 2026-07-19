@@ -1,0 +1,307 @@
+<script setup lang="ts">
+import { router } from '@inertiajs/vue3';
+import {
+    getLocalTimeZone,
+    parseAbsolute,
+    toCalendarDate,
+} from '@internationalized/date';
+import { reactive, ref, watch } from 'vue';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetFooter,
+    SheetHeader,
+    SheetTitle,
+} from '@/components/ui/sheet';
+import { destroy, store, update } from '@/routes/events';
+import type { CalendarEvent, WritableCalendar } from '@/types/calendar';
+
+const props = defineProps<{
+    open: boolean;
+    event: CalendarEvent | null;
+    defaultDate: string | null;
+    calendars: WritableCalendar[];
+}>();
+
+const emit = defineEmits<{ 'update:open': [boolean] }>();
+
+interface FormState {
+    calendar_id: number | null;
+    title: string;
+    description: string;
+    location: string;
+    all_day: boolean;
+    start: string;
+    end: string;
+}
+
+const form = reactive<FormState>({
+    calendar_id: null,
+    title: '',
+    description: '',
+    location: '',
+    all_day: false,
+    start: '',
+    end: '',
+});
+
+const errors = ref<Record<string, string>>({});
+const processing = ref(false);
+
+const pad = (n: number) => String(n).padStart(2, '0');
+
+function localDateTime(iso: string, timezone: string): string {
+    const z = parseAbsolute(iso, timezone);
+
+    return `${z.year}-${pad(z.month)}-${pad(z.day)}T${pad(z.hour)}:${pad(z.minute)}`;
+}
+
+function hydrate(): void {
+    errors.value = {};
+    const fallback =
+        props.calendars.find((c) => c.is_default) ?? props.calendars[0];
+
+    if (props.event) {
+        const e = props.event;
+        form.calendar_id = e.calendar_id;
+        form.title = e.title;
+        form.description = e.description ?? '';
+        form.location = e.location ?? '';
+        form.all_day = e.all_day;
+
+        if (e.all_day) {
+            form.start = toCalendarDate(
+                parseAbsolute(e.starts_at, 'UTC'),
+            ).toString();
+            form.end = toCalendarDate(parseAbsolute(e.ends_at, 'UTC'))
+                .subtract({ days: 1 })
+                .toString();
+        } else {
+            form.start = localDateTime(e.starts_at, e.timezone);
+            form.end = localDateTime(e.ends_at, e.timezone);
+        }
+
+        return;
+    }
+
+    const date = props.defaultDate ?? new Date().toISOString().slice(0, 10);
+    form.calendar_id = fallback?.id ?? null;
+    form.title = '';
+    form.description = '';
+    form.location = '';
+    form.all_day = false;
+    form.start = `${date}T09:00`;
+    form.end = `${date}T10:00`;
+}
+
+watch(
+    () => props.open,
+    (open) => {
+        if (open) {
+            hydrate();
+        }
+    },
+);
+
+// Keep the date/time inputs valid as the all-day toggle flips their type.
+watch(
+    () => form.all_day,
+    (allDay) => {
+        if (allDay) {
+            form.start = form.start.slice(0, 10);
+            form.end = form.end.slice(0, 10);
+        } else {
+            if (form.start.length === 10) {
+                form.start += 'T09:00';
+            }
+
+            if (form.end.length === 10) {
+                form.end += 'T10:00';
+            }
+        }
+    },
+);
+
+function payload() {
+    return {
+        calendar_id: form.calendar_id,
+        title: form.title,
+        description: form.description || null,
+        location: form.location || null,
+        all_day: form.all_day,
+        timezone: form.all_day ? null : getLocalTimeZone(),
+        starts_at: form.start,
+        ends_at: form.end,
+    };
+}
+
+function close(): void {
+    emit('update:open', false);
+}
+
+function submit(): void {
+    processing.value = true;
+    const options = {
+        preserveScroll: true,
+        onError: (e: Record<string, string>) => {
+            errors.value = e;
+        },
+        onSuccess: () => close(),
+        onFinish: () => {
+            processing.value = false;
+        },
+    };
+
+    if (props.event) {
+        router.patch(update(props.event.id).url, payload(), options);
+    } else {
+        router.post(store().url, payload(), options);
+    }
+}
+
+function remove(): void {
+    if (!props.event) {
+        return;
+    }
+
+    processing.value = true;
+    router.delete(destroy(props.event.id).url, {
+        preserveScroll: true,
+        onSuccess: () => close(),
+        onFinish: () => {
+            processing.value = false;
+        },
+    });
+}
+</script>
+
+<template>
+    <Sheet :open="open" @update:open="emit('update:open', $event)">
+        <SheetContent class="flex w-full flex-col gap-0 sm:max-w-md">
+            <SheetHeader>
+                <SheetTitle>{{
+                    event ? 'Edit event' : 'New event'
+                }}</SheetTitle>
+                <SheetDescription>
+                    {{
+                        event
+                            ? 'Update the details of this event.'
+                            : 'Add an event to your calendar.'
+                    }}
+                </SheetDescription>
+            </SheetHeader>
+
+            <form
+                class="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-2"
+                @submit.prevent="submit"
+            >
+                <div class="grid gap-2">
+                    <Label for="title">Title</Label>
+                    <Input id="title" v-model="form.title" required autofocus />
+                    <p v-if="errors.title" class="text-sm text-destructive">
+                        {{ errors.title }}
+                    </p>
+                </div>
+
+                <div class="grid gap-2">
+                    <Label for="calendar">Calendar</Label>
+                    <select
+                        id="calendar"
+                        v-model="form.calendar_id"
+                        class="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs"
+                    >
+                        <option
+                            v-for="calendar in calendars"
+                            :key="calendar.id"
+                            :value="calendar.id"
+                        >
+                            {{ calendar.name }}
+                        </option>
+                    </select>
+                    <p
+                        v-if="errors.calendar_id"
+                        class="text-sm text-destructive"
+                    >
+                        {{ errors.calendar_id }}
+                    </p>
+                </div>
+
+                <label class="flex items-center gap-2 text-sm">
+                    <input
+                        v-model="form.all_day"
+                        type="checkbox"
+                        class="size-4"
+                    />
+                    All day
+                </label>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="grid gap-2">
+                        <Label for="start">Starts</Label>
+                        <Input
+                            id="start"
+                            v-model="form.start"
+                            :type="form.all_day ? 'date' : 'datetime-local'"
+                            required
+                        />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="end">Ends</Label>
+                        <Input
+                            id="end"
+                            v-model="form.end"
+                            :type="form.all_day ? 'date' : 'datetime-local'"
+                            required
+                        />
+                    </div>
+                </div>
+                <p v-if="errors.ends_at" class="text-sm text-destructive">
+                    {{ errors.ends_at }}
+                </p>
+
+                <div class="grid gap-2">
+                    <Label for="location">Location</Label>
+                    <Input id="location" v-model="form.location" />
+                </div>
+
+                <div class="grid gap-2">
+                    <Label for="description">Description</Label>
+                    <textarea
+                        id="description"
+                        v-model="form.description"
+                        rows="3"
+                        class="rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs"
+                    />
+                </div>
+            </form>
+
+            <SheetFooter class="flex-row justify-between gap-2">
+                <Button
+                    v-if="event"
+                    type="button"
+                    variant="destructive"
+                    :disabled="processing"
+                    @click="remove"
+                >
+                    Delete
+                </Button>
+                <div class="ml-auto flex gap-2">
+                    <Button type="button" variant="outline" @click="close">
+                        Cancel
+                    </Button>
+                    <Button
+                        type="button"
+                        :disabled="processing"
+                        @click="submit"
+                    >
+                        Save
+                    </Button>
+                </div>
+            </SheetFooter>
+        </SheetContent>
+    </Sheet>
+</template>
