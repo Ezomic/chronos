@@ -23,6 +23,18 @@ class CalendarPolicy
 
     public function delete(User $user, Calendar $calendar): bool
     {
-        return $this->update($user, $calendar);
+        // The provisioned default calendar can't be removed; events must
+        // always have a writable calendar to land in.
+        return $this->update($user, $calendar)
+            && ! $calendar->is_default;
+    }
+
+    /**
+     * Visibility is a per-user display preference, so it can be toggled on any
+     * owned calendar, including read-only mirrored ones.
+     */
+    public function changeVisibility(User $user, Calendar $calendar): bool
+    {
+        return $calendar->user_id === $user->id;
     }
 }

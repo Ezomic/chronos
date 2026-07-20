@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\CalendarOAuthController;
+use App\Http\Controllers\Settings\CalendarController;
 use App\Http\Controllers\Settings\ConnectedAccountController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
@@ -12,8 +13,13 @@ Route::middleware(['auth'])->group(function () {
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');
 
-    Route::get('settings/calendars', [ConnectedAccountController::class, 'edit'])->name('calendars.edit');
-    Route::delete('settings/calendars/{account}', [ConnectedAccountController::class, 'destroy'])->name('calendars.destroy');
+    Route::get('settings/calendars', [CalendarController::class, 'edit'])->name('calendars.edit');
+    Route::post('settings/calendars', [CalendarController::class, 'store'])->name('calendars.store');
+    Route::patch('settings/calendars/{calendar}', [CalendarController::class, 'update'])->name('calendars.update');
+    Route::patch('settings/calendars/{calendar}/visibility', [CalendarController::class, 'visibility'])->name('calendars.visibility');
+    Route::delete('settings/calendars/{calendar}', [CalendarController::class, 'destroy'])->name('calendars.destroy');
+
+    Route::delete('settings/connected-accounts/{account}', [ConnectedAccountController::class, 'destroy'])->name('connected-accounts.destroy');
 
     Route::get('auth/{provider}/redirect', [CalendarOAuthController::class, 'redirect'])->name('oauth.redirect');
     Route::get('auth/{provider}/callback', [CalendarOAuthController::class, 'callback'])->name('oauth.callback');

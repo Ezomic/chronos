@@ -65,7 +65,7 @@ it('disconnects an account', function () {
     $account = ConnectedAccount::factory()->for($user)->create();
 
     $this->actingAs($user)
-        ->delete(route('calendars.destroy', $account))
+        ->delete(route('connected-accounts.destroy', $account))
         ->assertRedirect();
 
     expect(ConnectedAccount::find($account->id))->toBeNull();
@@ -75,7 +75,7 @@ it('forbids disconnecting another user\'s account', function () {
     $account = ConnectedAccount::factory()->create();
 
     $this->actingAs(User::factory()->create())
-        ->delete(route('calendars.destroy', $account))
+        ->delete(route('connected-accounts.destroy', $account))
         ->assertForbidden();
 
     expect(ConnectedAccount::find($account->id))->not->toBeNull();
