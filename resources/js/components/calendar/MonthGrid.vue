@@ -39,9 +39,12 @@ const MAX_VISIBLE = 3;
             </div>
         </div>
 
-        <!-- Six rows of min-h-24 can exceed a short viewport; scroll rather
-             than clipping the last week. -->
-        <div class="grid flex-1 grid-rows-6 overflow-y-auto">
+        <!-- Each week gets a 6rem floor and an equal share of any extra height.
+             Plain grid-rows-6 (six 1fr rows) compresses rows below their cells
+             on a short viewport, which the wrapper's overflow-hidden then clips;
+             the floor makes the grid grow instead, so the page scrolls and the
+             last week stays reachable. -->
+        <div class="grid flex-1 grid-rows-[repeat(6,minmax(6rem,1fr))]">
             <div v-for="(week, wi) in weeks" :key="wi" class="grid grid-cols-7">
                 <div
                     v-for="cell in week"
