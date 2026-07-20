@@ -1,4 +1,5 @@
 import {
+    getDayOfWeek,
     parseAbsolute,
     parseDate,
     startOfWeek,
@@ -19,6 +20,7 @@ export interface DayCell {
     day: number;
     inCurrentMonth: boolean;
     isToday: boolean;
+    isWeekend: boolean;
     events: CalendarEvent[];
 }
 
@@ -114,6 +116,7 @@ export function useCalendarGrid(
                 day: date.day,
                 inCurrentMonth: date.month === currentMonth,
                 isToday: key === today,
+                isWeekend: getDayOfWeek(date, LOCALE) >= 5,
                 events: eventsByDay.value.get(key) ?? [],
             });
         }
