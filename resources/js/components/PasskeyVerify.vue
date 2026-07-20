@@ -59,13 +59,15 @@ const { verify, isLoading, error, isSupported } = usePasskeyVerify({
             </div>
         </div>
 
-        <div class="relative my-6">
+        <!-- Only shown when a caller passes a separator label, i.e. when
+             something actually follows this block. -->
+        <div v-if="props.separator" class="relative my-6">
             <div class="absolute inset-0 flex items-center">
                 <Separator class="w-full" />
             </div>
             <div class="relative flex justify-center text-xs uppercase">
                 <span class="bg-background px-2 text-muted-foreground">
-                    {{ props.separator ?? 'Or continue with email' }}
+                    {{ props.separator }}
                 </span>
             </div>
         </div>
