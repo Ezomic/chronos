@@ -45,4 +45,3 @@ jobs:
             php artisan optimize
             sudo /bin/systemctl reload php8.4-fpm
             php artisan up
-            sudo /usr/bin/supervisorctl restart chronos-scheduler:*
