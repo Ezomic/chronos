@@ -27,6 +27,7 @@ class CreateEventAction
         ?string $location = null,
         ?EventSource $source = null,
         ?string $rrule = null,
+        ?int $reminderMinutes = null,
     ): Event {
         $event = new Event;
 
@@ -40,6 +41,7 @@ class CreateEventAction
             'all_day' => $allDay,
             'timezone' => $timezone,
             'rrule' => $rrule,
+            'reminder_minutes' => $reminderMinutes,
             'source_app' => $source?->app,
             'source_type' => $source?->type,
             'source_id' => $source?->id,

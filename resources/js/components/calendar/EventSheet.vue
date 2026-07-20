@@ -41,6 +41,7 @@ interface FormState {
     end: string;
     frequency: string;
     until: string;
+    reminder: string;
 }
 
 const form = reactive<FormState>({
@@ -53,7 +54,20 @@ const form = reactive<FormState>({
     end: '',
     frequency: 'none',
     until: '',
+    reminder: 'none',
 });
+
+const reminderOptions = [
+    { value: 'none', label: 'No reminder' },
+    { value: '0', label: 'At start time' },
+    { value: '5', label: '5 minutes before' },
+    { value: '10', label: '10 minutes before' },
+    { value: '15', label: '15 minutes before' },
+    { value: '30', label: '30 minutes before' },
+    { value: '60', label: '1 hour before' },
+    { value: '120', label: '2 hours before' },
+    { value: '1440', label: '1 day before' },
+];
 
 const repeatOptions = [
     { value: 'none', label: 'Does not repeat' },
@@ -116,6 +130,10 @@ function hydrate(): void {
         const recurrence = parseRrule(e.rrule);
         form.frequency = recurrence.frequency;
         form.until = recurrence.until;
+        form.reminder =
+            e.reminder_minutes === null || e.reminder_minutes === undefined
+                ? 'none'
+                : String(e.reminder_minutes);
 
         // Editing a series edits its anchor, not the clicked occurrence.
         const start = e.series_starts_at ?? e.starts_at;
@@ -144,6 +162,7 @@ function hydrate(): void {
     form.end = `${date}T10:00`;
     form.frequency = 'none';
     form.until = '';
+    form.reminder = 'none';
 }
 
 watch(
@@ -162,6 +181,8 @@ watch(
         if (allDay) {
             form.start = form.start.slice(0, 10);
             form.end = form.end.slice(0, 10);
+            // Reminders are only offered for timed events.
+            form.reminder = 'none';
         } else {
             if (form.start.length === 10) {
                 form.start += 'T09:00';
@@ -186,6 +207,8 @@ function payload() {
         ends_at: form.end,
         frequency: form.frequency,
         until: form.frequency === 'none' ? null : form.until || null,
+        reminder_minutes:
+            form.reminder === 'none' ? null : Number(form.reminder),
     };
 }
 
@@ -345,6 +368,23 @@ function remove(): void {
                     <p v-if="errors.until" class="text-sm text-destructive">
                         {{ errors.until }}
                     </p>
+                </div>
+
+                <div v-if="!form.all_day" class="grid gap-2">
+                    <Label for="reminder">Reminder</Label>
+                    <select
+                        id="reminder"
+                        v-model="form.reminder"
+                        class="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs"
+                    >
+                        <option
+                            v-for="option in reminderOptions"
+                            :key="option.value"
+                            :value="option.value"
+                        >
+                            {{ option.label }}
+                        </option>
+                    </select>
                 </div>
 
                 <div class="grid gap-2">

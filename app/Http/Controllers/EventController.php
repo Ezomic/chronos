@@ -48,6 +48,7 @@ class EventController extends Controller
             description: $request->input('description'),
             location: $request->input('location'),
             rrule: $this->buildRrule($request, $timezone),
+            reminderMinutes: $this->reminderMinutes($request),
         );
 
         return back();
@@ -66,6 +67,13 @@ class EventController extends Controller
             $request->string('ends_at')->toString(),
         );
 
+        $reminderMinutes = $this->reminderMinutes($request);
+
+        // Re-arm a spent reminder when its timing changes, so an edited event
+        // reminds again instead of staying silent from a stale sent stamp.
+        $reminderChanged = $reminderMinutes !== $event->reminder_minutes
+            || ! $startsAt->equalTo($event->starts_at);
+
         $event->forceFill([
             'calendar_id' => $calendar->id,
             'title' => $request->string('title')->toString(),
@@ -76,6 +84,8 @@ class EventController extends Controller
             'all_day' => $request->boolean('all_day'),
             'timezone' => $timezone,
             'rrule' => $this->buildRrule($request, $timezone),
+            'reminder_minutes' => $reminderMinutes,
+            'reminder_sent_at' => $reminderChanged ? null : $event->reminder_sent_at,
         ])->save();
 
         return back();
@@ -88,6 +98,13 @@ class EventController extends Controller
         $event->delete();
 
         return back();
+    }
+
+    private function reminderMinutes(FormRequest $request): ?int
+    {
+        return $request->filled('reminder_minutes')
+            ? $request->integer('reminder_minutes')
+            : null;
     }
 
     /**

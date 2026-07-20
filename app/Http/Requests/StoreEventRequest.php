@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Concerns\InteractsWithCurrentUser;
+use App\Models\Event;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -38,6 +39,7 @@ class StoreEventRequest extends FormRequest
             'ends_at' => ['required', 'date', $this->boolean('all_day') ? 'after_or_equal:starts_at' : 'after:starts_at'],
             'frequency' => ['nullable', Rule::in(['none', 'daily', 'weekly', 'monthly', 'yearly'])],
             'until' => ['nullable', 'date', 'after_or_equal:starts_at'],
+            'reminder_minutes' => ['nullable', 'integer', Rule::in(Event::REMINDER_CHOICES)],
         ];
     }
 }
