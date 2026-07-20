@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Concerns\InteractsWithCurrentUser;
+use App\Models\Calendar;
 use App\Models\Event;
 use App\Services\Calendar\RecurrenceExpander;
 use Carbon\CarbonImmutable;
@@ -14,6 +16,8 @@ use Inertia\Response;
 
 class CalendarController extends Controller
 {
+    use InteractsWithCurrentUser;
+
     public function __construct(private readonly RecurrenceExpander $expander) {}
 
     /**
@@ -46,7 +50,7 @@ class CalendarController extends Controller
         $to = $gridEnd->addDay();
 
         $ownedVisible = fn ($query) => $query
-            ->where('user_id', $request->user()->id)
+            ->where('user_id', $this->currentUser()->id)
             ->where('is_visible', true);
 
         // Non-recurring events overlapping the window.
@@ -81,7 +85,7 @@ class CalendarController extends Controller
 
         $events = $events->sortBy('starts_at')->values();
 
-        $calendars = $request->user()->calendars()
+        $calendars = $this->currentUser()->calendars()
             ->where('is_writable', true)
             ->orderByDesc('is_default')
             ->orderBy('name')
@@ -108,7 +112,9 @@ class CalendarController extends Controller
             'calendar_id' => $event->calendar_id,
             'title' => $event->title,
             'description' => $event->description,
-            'color' => $event->calendar->color,
+            // whereHas('calendar') already guarantees the relation, so this only
+            // guards the type: the frontend types color as non-nullable.
+            'color' => $event->calendar->color ?? Calendar::COLOR_PALETTE[0],
             'all_day' => $event->all_day,
             'starts_at' => $startsAt->toIso8601String(),
             'ends_at' => $endsAt->toIso8601String(),
@@ -130,7 +136,8 @@ class CalendarController extends Controller
         }
 
         try {
-            return CarbonImmutable::createFromFormat('Y-m-d', $date)->startOfDay();
+            return CarbonImmutable::createFromFormat('Y-m-d', $date)?->startOfDay()
+                ?? CarbonImmutable::today();
         } catch (\Throwable) {
             return CarbonImmutable::today();
         }

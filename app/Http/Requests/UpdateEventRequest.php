@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Concerns\InteractsWithCurrentUser;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class UpdateEventRequest extends FormRequest
 {
+    use InteractsWithCurrentUser;
+
     public function authorize(): bool
     {
         return true;
@@ -23,7 +26,7 @@ class UpdateEventRequest extends FormRequest
             'calendar_id' => [
                 'required',
                 Rule::exists('calendars', 'id')->where(fn ($query) => $query
-                    ->where('user_id', $this->user()->id)
+                    ->where('user_id', $this->currentUser()->id)
                     ->where('is_writable', true)),
             ],
             'title' => ['required', 'string', 'max:255'],
