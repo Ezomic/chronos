@@ -20,6 +20,8 @@ use Illuminate\Support\Carbon;
  * @property bool $all_day
  * @property string $timezone
  * @property string|null $rrule
+ * @property int|null $reminder_minutes
+ * @property Carbon|null $reminder_sent_at
  * @property string|null $external_id
  * @property string|null $external_etag
  * @property string|null $source_app
@@ -39,6 +41,8 @@ use Illuminate\Support\Carbon;
     'all_day',
     'timezone',
     'rrule',
+    'reminder_minutes',
+    'reminder_sent_at',
     'external_id',
     'external_etag',
     'source_app',
@@ -48,6 +52,9 @@ use Illuminate\Support\Carbon;
 ])]
 class Event extends Model
 {
+    /** Minutes-before-start a reminder may be set to. */
+    public const REMINDER_CHOICES = [0, 5, 10, 15, 30, 60, 120, 1440];
+
     /** @use HasFactory<EventFactory> */
     use HasFactory;
 
@@ -68,6 +75,8 @@ class Event extends Model
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
             'all_day' => 'boolean',
+            'reminder_minutes' => 'integer',
+            'reminder_sent_at' => 'datetime',
         ];
     }
 }
