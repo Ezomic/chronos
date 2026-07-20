@@ -22,8 +22,8 @@ trait ResolvesEventTimes
             $endDate = CarbonImmutable::parse($end)->format('Y-m-d');
 
             return [
-                CarbonImmutable::createFromFormat('Y-m-d H:i', "{$startDate} 00:00", 'UTC'),
-                CarbonImmutable::createFromFormat('Y-m-d H:i', "{$endDate} 00:00", 'UTC')->addDay(),
+                CarbonImmutable::parse("{$startDate} 00:00", 'UTC'),
+                CarbonImmutable::parse("{$endDate} 00:00", 'UTC')->addDay(),
                 'UTC',
             ];
         }
