@@ -21,6 +21,8 @@ export interface CalendarEvent {
     source_url: string | null;
     /** RRULE string when the event repeats, else null. */
     rrule: string | null;
+    /** Minutes before start to remind, or null for no reminder. */
+    reminder_minutes: number | null;
     /** The series anchor times (for editing the whole series), null when single. */
     series_starts_at: string | null;
     series_ends_at: string | null;

@@ -123,6 +123,7 @@ class CalendarController extends Controller
             'source_app' => $event->source_app,
             'source_url' => $event->source_url,
             'rrule' => $event->rrule,
+            'reminder_minutes' => $event->reminder_minutes,
             // The series anchor (for editing the whole series), null when single.
             'series_starts_at' => $event->rrule ? $event->starts_at->toIso8601String() : null,
             'series_ends_at' => $event->rrule ? $event->ends_at->toIso8601String() : null,
