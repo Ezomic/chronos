@@ -39,7 +39,9 @@ const MAX_VISIBLE = 3;
             </div>
         </div>
 
-        <div class="grid flex-1 grid-rows-6">
+        <!-- Six rows of min-h-24 can exceed a short viewport; scroll rather
+             than clipping the last week. -->
+        <div class="grid flex-1 grid-rows-6 overflow-y-auto">
             <div v-for="(week, wi) in weeks" :key="wi" class="grid grid-cols-7">
                 <div
                     v-for="cell in week"
