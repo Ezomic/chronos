@@ -51,9 +51,11 @@ const MAX_VISIBLE = 3;
                     :key="cell.key"
                     :class="
                         cn(
-                            'flex min-h-24 cursor-pointer flex-col gap-0.5 border-t border-l p-1 first:border-l-0 hover:bg-accent/40',
+                            'relative flex min-h-24 cursor-pointer flex-col gap-0.5 border-t border-l p-1 transition-colors first:border-l-0 hover:bg-accent/50',
+                            cell.isWeekend && 'bg-muted/40',
                             !cell.inCurrentMonth &&
-                                'bg-muted/30 text-muted-foreground',
+                                'bg-muted/20 text-muted-foreground',
+                            cell.isToday && 'ring-1 ring-primary/40 ring-inset',
                         )
                     "
                     @click="emit('select-day', cell.key)"
@@ -62,7 +64,7 @@ const MAX_VISIBLE = 3;
                         <span
                             :class="
                                 cn(
-                                    'flex size-6 items-center justify-center rounded-full text-xs',
+                                    'flex size-6 items-center justify-center rounded-full text-xs tabular-nums',
                                     cell.isToday &&
                                         'bg-primary font-semibold text-primary-foreground',
                                 )

@@ -41,8 +41,8 @@ class Calendar extends Model
 {
     /** Distinguishing colors auto-assigned to new calendars. */
     public const COLOR_PALETTE = [
-        '#3B82F6', '#10B981', '#F59E0B', '#EF4444',
-        '#8B5CF6', '#EC4899', '#14B8A6', '#F97316',
+        '#5B5BD6', '#0D9488', '#D97706', '#E11D48',
+        '#9333EA', '#EC4899', '#0EA5E9', '#F97316',
     ];
 
     /** @use HasFactory<CalendarFactory> */
