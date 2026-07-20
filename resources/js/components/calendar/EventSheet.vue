@@ -26,6 +26,8 @@ const props = defineProps<{
     open: boolean;
     event: CalendarEvent | null;
     defaultDate: string | null;
+    defaultStart?: string | null;
+    defaultEnd?: string | null;
     calendars: WritableCalendar[];
 }>();
 
@@ -157,9 +159,11 @@ function hydrate(): void {
     form.title = '';
     form.description = '';
     form.location = '';
+    // A drag on the grid hands us an explicit timed range; otherwise fall back
+    // to a 09:00 default on the chosen day.
     form.all_day = false;
-    form.start = `${date}T09:00`;
-    form.end = `${date}T10:00`;
+    form.start = props.defaultStart ?? `${date}T09:00`;
+    form.end = props.defaultEnd ?? `${date}T10:00`;
     form.frequency = 'none';
     form.until = '';
     form.reminder = 'none';
