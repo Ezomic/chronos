@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Mail, Repeat } from '@lucide/vue';
+import { Bell, Mail, Repeat } from '@lucide/vue';
 import { computed } from 'vue';
 import { formatEventTime } from '@/composables/useCalendarGrid';
 import { sourceLink } from '@/lib/eventSource';
@@ -39,6 +39,10 @@ const style = computed(() => {
         </span>
         <Mail v-if="fromMail && source" class="size-3 shrink-0 opacity-70" />
         <Repeat v-if="event.rrule" class="size-3 shrink-0 opacity-70" />
+        <Bell
+            v-if="event.reminder_minutes !== null"
+            class="size-3 shrink-0 opacity-70"
+        />
         <span class="truncate">{{ event.title }}</span>
     </div>
 </template>
