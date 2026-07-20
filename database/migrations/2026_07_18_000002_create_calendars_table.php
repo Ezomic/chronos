@@ -17,7 +17,7 @@ return new class extends Migration
             $table->foreignId('connected_account_id')->nullable()->constrained()->cascadeOnDelete();
 
             $table->string('name');
-            $table->string('color', 7)->default('#3B82F6');
+            $table->string('color', 7)->default('#5B5BD6');
             $table->string('timezone')->default('Europe/Amsterdam');
 
             // Provider calendar id for mirrored calendars.
