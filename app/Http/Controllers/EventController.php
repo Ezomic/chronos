@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Actions\CreateEventAction;
+use App\Concerns\InteractsWithCurrentUser;
 use App\Concerns\ResolvesEventTimes;
 use App\Http\Requests\StoreEventRequest;
 use App\Http\Requests\UpdateEventRequest;
@@ -16,6 +17,7 @@ use Illuminate\Http\RedirectResponse;
 
 class EventController extends Controller
 {
+    use InteractsWithCurrentUser;
     use ResolvesEventTimes;
 
     private const FREQUENCIES = [
@@ -53,7 +55,7 @@ class EventController extends Controller
 
     public function update(UpdateEventRequest $request, Event $event): RedirectResponse
     {
-        abort_unless($request->user()->can('update', $event), 403);
+        abort_unless($this->currentUser()->can('update', $event), 403);
 
         $calendar = Calendar::findOrFail($request->integer('calendar_id'));
 
@@ -81,7 +83,7 @@ class EventController extends Controller
 
     public function destroy(Event $event): RedirectResponse
     {
-        abort_unless(request()->user()->can('delete', $event), 403);
+        abort_unless($this->currentUser()->can('delete', $event), 403);
 
         $event->delete();
 

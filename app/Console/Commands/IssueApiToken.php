@@ -23,7 +23,9 @@ class IssueApiToken extends Command
             return self::FAILURE;
         }
 
-        $token = $user->createToken($this->option('name'), [$this->option('ability')]);
+        $name = $this->option('name');
+
+        $token = $user->createToken(is_string($name) ? $name : 'api', [$this->option('ability')]);
 
         $this->info("Token for {$user->email} (ability: {$this->option('ability')}) — shown once:");
         $this->line($token->plainTextToken);

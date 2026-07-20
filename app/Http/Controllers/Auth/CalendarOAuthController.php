@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Auth;
 
+use App\Concerns\InteractsWithCurrentUser;
 use App\Http\Controllers\Controller;
 use App\Models\ConnectedAccount;
 use Illuminate\Http\RedirectResponse;
@@ -15,6 +16,8 @@ use Symfony\Component\HttpFoundation\RedirectResponse as SymfonyRedirect;
 
 class CalendarOAuthController extends Controller
 {
+    use InteractsWithCurrentUser;
+
     private const PROVIDERS = ['google', 'microsoft'];
 
     private const SCOPES = [
@@ -48,7 +51,7 @@ class CalendarOAuthController extends Controller
         abort_unless($oauthUser instanceof SocialiteUser, 500);
 
         $account = ConnectedAccount::query()->firstOrNew([
-            'user_id' => $request->user()->id,
+            'user_id' => $this->currentUser()->id,
             'provider' => $provider,
             'email_address' => $oauthUser->getEmail(),
         ]);

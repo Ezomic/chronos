@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Actions\CreateEventAction;
+use App\Concerns\InteractsWithCurrentUser;
 use App\Concerns\ResolvesEventTimes;
 use App\DataObjects\EventSource;
 use App\Http\Controllers\Controller;
@@ -13,13 +14,14 @@ use Illuminate\Http\JsonResponse;
 
 class EventController extends Controller
 {
+    use InteractsWithCurrentUser;
     use ResolvesEventTimes;
 
     public function store(StoreEventRequest $request, CreateEventAction $action): JsonResponse
     {
         // The token is bound to a user, so events land in their default
         // writable calendar without a calendar parameter.
-        $calendar = $request->user()->calendars()
+        $calendar = $this->currentUser()->calendars()
             ->where('is_writable', true)
             ->orderByDesc('is_default')
             ->first();

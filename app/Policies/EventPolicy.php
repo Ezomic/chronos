@@ -9,7 +9,7 @@ class EventPolicy
 {
     public function view(User $user, Event $event): bool
     {
-        return $event->calendar->user_id === $user->id;
+        return $event->calendar?->user_id === $user->id;
     }
 
     public function create(User $user): bool
@@ -23,8 +23,11 @@ class EventPolicy
      */
     public function update(User $user, Event $event): bool
     {
-        return $event->calendar->user_id === $user->id
-            && $event->calendar->is_writable;
+        $calendar = $event->calendar;
+
+        return $calendar !== null
+            && $calendar->user_id === $user->id
+            && $calendar->is_writable;
     }
 
     public function delete(User $user, Event $event): bool

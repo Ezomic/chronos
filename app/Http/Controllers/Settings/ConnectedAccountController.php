@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Settings;
 
+use App\Concerns\InteractsWithCurrentUser;
 use App\Http\Controllers\Controller;
 use App\Models\ConnectedAccount;
 use Illuminate\Http\RedirectResponse;
@@ -13,10 +14,12 @@ use Inertia\Response;
 
 class ConnectedAccountController extends Controller
 {
+    use InteractsWithCurrentUser;
+
     public function edit(Request $request): Response
     {
         return Inertia::render('settings/Calendars', [
-            'accounts' => $request->user()->connectedAccounts()
+            'accounts' => $this->currentUser()->connectedAccounts()
                 ->latest()
                 ->get()
                 ->map(fn (ConnectedAccount $account) => [
@@ -33,7 +36,7 @@ class ConnectedAccountController extends Controller
 
     public function destroy(Request $request, ConnectedAccount $account): RedirectResponse
     {
-        abort_unless($account->user_id === $request->user()->id, 403);
+        abort_unless($account->user_id === $this->currentUser()->id, 403);
 
         // Cascades to the account's mirrored calendars and their events.
         $account->delete();
