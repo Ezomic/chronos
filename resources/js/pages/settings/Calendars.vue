@@ -269,7 +269,9 @@ function disconnect(id: number): void {
                                 <p class="truncate text-sm font-medium">
                                     {{ account.email }}
                                 </p>
-                                <p class="truncate text-xs text-muted-foreground">
+                                <p
+                                    class="truncate text-xs text-muted-foreground"
+                                >
                                     {{ providerLabel(account.provider) }}
                                     <span
                                         v-if="account.needs_reconnect"
@@ -286,7 +288,9 @@ function disconnect(id: number): void {
                                         </span>
                                     </template>
                                     <template v-else>
-                                        <span v-if="account.last_synced_at_diff">
+                                        <span
+                                            v-if="account.last_synced_at_diff"
+                                        >
                                             · synced
                                             {{ account.last_synced_at_diff }}
                                         </span>
@@ -324,10 +328,7 @@ function disconnect(id: number): void {
                         <span>
                             Syncing stopped, so this calendar is no longer
                             updating. Reconnect to fix it.
-                            <span
-                                v-if="account.sync_error"
-                                class="opacity-80"
-                            >
+                            <span v-if="account.sync_error" class="opacity-80">
                                 ({{ account.sync_error }})
                             </span>
                         </span>
