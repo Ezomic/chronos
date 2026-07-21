@@ -3,6 +3,7 @@ import { Head, router } from '@inertiajs/vue3';
 import { CalendarClock, Pencil, Plus, Trash2 } from '@lucide/vue';
 import { reactive, ref, watch } from 'vue';
 import Heading from '@/components/Heading.vue';
+import TimeSelect from '@/components/TimeSelect.vue';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -369,10 +370,9 @@ function summary(template: EventTemplate): string {
                 <template v-else>
                     <div class="grid gap-2">
                         <Label for="start-time">Default start time</Label>
-                        <Input
+                        <TimeSelect
                             id="start-time"
                             v-model="form.default_start_time"
-                            type="time"
                         />
                     </div>
                     <div class="grid grid-cols-2 gap-2">
