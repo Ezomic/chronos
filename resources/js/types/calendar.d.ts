@@ -4,6 +4,10 @@ export interface CalendarEvent {
     /** The database event id (the master, for recurring series). */
     id: number;
     calendar_id: number;
+    /** The event's calendar name (shown for read-only mirrored events). */
+    calendar_name: string;
+    /** False for events on read-only mirrored calendars (Google/Microsoft). */
+    editable: boolean;
     title: string;
     description: string | null;
     color: string;
