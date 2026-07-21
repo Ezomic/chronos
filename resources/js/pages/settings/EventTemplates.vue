@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
 import { CalendarClock, Pencil, Plus, Trash2 } from '@lucide/vue';
-import { reactive, ref } from 'vue';
+import { reactive, ref, watch } from 'vue';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -72,6 +72,17 @@ const editing = ref<EventTemplate | null>(null);
 
 const deleteOpen = ref(false);
 const deleting = ref<EventTemplate | null>(null);
+
+// Reminders are only offered for timed events, so drop a stale one when the
+// template is switched to all-day (the reminder field is hidden then).
+watch(
+    () => form.all_day,
+    (allDay) => {
+        if (allDay) {
+            form.reminder = 'none';
+        }
+    },
+);
 
 const defaultCalendarId = () =>
     props.calendars.find((c) => c.is_default)?.id ??

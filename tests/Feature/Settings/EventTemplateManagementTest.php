@@ -238,3 +238,220 @@ it('feeds templates into the calendar page', function () {
             ->has('templates', 1)
             ->where('templates.0.name', 'Standup'));
 });
+
+it('only feeds the current user\'s templates into the calendar page, ordered by name', function () {
+    $user = User::factory()->create();
+    EventTemplate::factory()->for($user)->create(['name' => 'Zeta']);
+    EventTemplate::factory()->for($user)->create(['name' => 'Alpha']);
+    EventTemplate::factory()->for(User::factory())->create(['name' => 'Foreign']);
+
+    $this->actingAs($user)
+        ->get(route('calendar.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('calendar/Index')
+            ->has('templates', 2)
+            ->where('templates.0.name', 'Alpha')
+            ->where('templates.1.name', 'Zeta'));
+});
+
+it('rejects a name longer than 60 characters', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('event-templates.store'), [
+            'name' => str_repeat('a', 61),
+            'title' => 'Title',
+            'duration_minutes' => 60,
+        ])
+        ->assertSessionHasErrors('name');
+});
+
+it('rejects a template without a title', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('event-templates.store'), [
+            'name' => 'No title',
+            'duration_minutes' => 60,
+        ])
+        ->assertSessionHasErrors('title');
+});
+
+it('rejects a non-positive duration', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('event-templates.store'), [
+            'name' => 'Zero duration',
+            'title' => 'Nope',
+            'duration_minutes' => 0,
+        ])
+        ->assertSessionHasErrors('duration_minutes');
+});
+
+it('rejects a default_start_time that is not H:i formatted', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('event-templates.store'), [
+            'name' => 'Bad time',
+            'title' => 'Nope',
+            'duration_minutes' => 60,
+            'default_start_time' => '25:99',
+        ])
+        ->assertSessionHasErrors('default_start_time');
+});
+
+it('rejects an invalid frequency', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('event-templates.store'), [
+            'name' => 'Bad frequency',
+            'title' => 'Nope',
+            'duration_minutes' => 60,
+            'frequency' => 'hourly',
+        ])
+        ->assertSessionHasErrors('frequency');
+});
+
+it('rejects a location longer than 255 characters', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('event-templates.store'), [
+            'name' => 'Long location',
+            'title' => 'Nope',
+            'duration_minutes' => 60,
+            'location' => str_repeat('a', 256),
+        ])
+        ->assertSessionHasErrors('location');
+});
+
+it('accepts boundary reminder_minutes values', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('event-templates.store'), [
+            'name' => 'No reminder at all',
+            'title' => 'Zero reminder',
+            'duration_minutes' => 60,
+            'reminder_minutes' => 0,
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect(EventTemplate::query()->where('name', 'No reminder at all')->firstOrFail()->reminder_minutes)
+        ->toBe(0);
+
+    $this->actingAs($user)
+        ->post(route('event-templates.store'), [
+            'name' => 'A day before',
+            'title' => 'Max reminder',
+            'duration_minutes' => 60,
+            'reminder_minutes' => 1440,
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect(EventTemplate::query()->where('name', 'A day before')->firstOrFail()->reminder_minutes)
+        ->toBe(1440);
+});
+
+it('defaults all_day to false when omitted', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('event-templates.store'), [
+            'name' => 'No all_day key',
+            'title' => 'Nope',
+            'duration_minutes' => 60,
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect(EventTemplate::query()->where('name', 'No all_day key')->firstOrFail()->all_day)
+        ->toBeFalse();
+});
+
+it('rejects a calendar_id belonging to another user on update', function () {
+    $user = User::factory()->create();
+    $template = EventTemplate::factory()->for($user)->create(['calendar_id' => null]);
+    $foreign = Calendar::factory()->for(User::factory())->create();
+
+    $this->actingAs($user)
+        ->patch(route('event-templates.update', $template), [
+            'name' => 'Hijacked calendar',
+            'title' => 'Nope',
+            'calendar_id' => $foreign->id,
+            'duration_minutes' => 60,
+        ])
+        ->assertSessionHasErrors('calendar_id');
+
+    expect($template->refresh()->calendar_id)->toBeNull();
+});
+
+it('rejects an update without a name', function () {
+    $user = User::factory()->create();
+    $template = EventTemplate::factory()->for($user)->create();
+
+    $this->actingAs($user)
+        ->patch(route('event-templates.update', $template), [
+            'title' => 'Still here',
+            'duration_minutes' => 60,
+        ])
+        ->assertSessionHasErrors('name');
+});
+
+it('deletes a user\'s templates when the user is deleted', function () {
+    $user = User::factory()->create();
+    $template = EventTemplate::factory()->for($user)->create();
+
+    $user->delete();
+
+    expect(EventTemplate::query()->find($template->id))->toBeNull();
+});
+
+it('redirects guests away from the templates settings page', function () {
+    $this->get(route('event-templates.edit'))
+        ->assertRedirect(route('login'));
+});
+
+it('redirects guests attempting to create a template', function () {
+    $this->post(route('event-templates.store'), [
+        'name' => 'Nope',
+        'title' => 'Nope',
+        'duration_minutes' => 60,
+    ])->assertRedirect(route('login'));
+});
+
+it('only lists the current user\'s templates on the settings page, ordered by name', function () {
+    $user = User::factory()->create();
+    EventTemplate::factory()->for($user)->create(['name' => 'Zebra']);
+    EventTemplate::factory()->for($user)->create(['name' => 'Apple']);
+    EventTemplate::factory()->for(User::factory())->create(['name' => 'Foreign']);
+
+    $this->actingAs($user)
+        ->get(route('event-templates.edit'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('settings/EventTemplates')
+            ->has('templates', 2)
+            ->where('templates.0.name', 'Apple')
+            ->where('templates.1.name', 'Zebra'));
+});
+
+it('only lists the user\'s writable calendars on the settings page', function () {
+    $user = User::factory()->create();
+    Calendar::factory()->mirrored()->for($user)->create(['name' => 'Mirrored']);
+
+    $this->actingAs($user)
+        ->get(route('event-templates.edit'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('settings/EventTemplates')
+            ->where('calendars', fn ($calendars) => collect($calendars)->every(
+                fn ($calendar) => $calendar['name'] !== 'Mirrored'
+            )));
+});
