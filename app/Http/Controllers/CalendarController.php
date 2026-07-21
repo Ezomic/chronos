@@ -92,11 +92,21 @@ class CalendarController extends Controller
             ->get(['id', 'name', 'color', 'is_default'])
             ->values();
 
+        $templates = $this->currentUser()->eventTemplates()
+            ->orderBy('name')
+            ->get([
+                'id', 'name', 'calendar_id', 'title', 'description', 'location',
+                'all_day', 'duration_minutes', 'default_start_time', 'frequency',
+                'reminder_minutes',
+            ])
+            ->values();
+
         return Inertia::render('calendar/Index', [
             'view' => $view,
             'date' => $anchor->toDateString(),
             'events' => $events,
             'calendars' => $calendars,
+            'templates' => $templates,
         ]);
     }
 
