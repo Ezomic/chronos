@@ -61,7 +61,11 @@ const search = ref(props.query);
 function runSearch(): void {
     router.get(
         calendarIndex({
-            query: { view: 'agenda', date: props.date, q: search.value || undefined },
+            query: {
+                view: 'agenda',
+                date: props.date,
+                q: search.value || undefined,
+            },
         }).url,
         {},
         { preserveState: true, preserveScroll: true, replace: true },
