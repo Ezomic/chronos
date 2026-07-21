@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\CalendarOAuthController;
 use App\Http\Controllers\Settings\CalendarController;
 use App\Http\Controllers\Settings\ConnectedAccountController;
+use App\Http\Controllers\Settings\EventTemplateController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use Illuminate\Support\Facades\Route;
@@ -18,6 +19,11 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('settings/calendars/{calendar}', [CalendarController::class, 'update'])->name('calendars.update');
     Route::patch('settings/calendars/{calendar}/visibility', [CalendarController::class, 'visibility'])->name('calendars.visibility');
     Route::delete('settings/calendars/{calendar}', [CalendarController::class, 'destroy'])->name('calendars.destroy');
+
+    Route::get('settings/templates', [EventTemplateController::class, 'edit'])->name('event-templates.edit');
+    Route::post('settings/templates', [EventTemplateController::class, 'store'])->name('event-templates.store');
+    Route::patch('settings/templates/{eventTemplate}', [EventTemplateController::class, 'update'])->name('event-templates.update');
+    Route::delete('settings/templates/{eventTemplate}', [EventTemplateController::class, 'destroy'])->name('event-templates.destroy');
 
     Route::delete('settings/connected-accounts/{account}', [ConnectedAccountController::class, 'destroy'])->name('connected-accounts.destroy');
 

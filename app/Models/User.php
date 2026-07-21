@@ -51,6 +51,14 @@ class User extends Authenticatable implements PasskeyUser
     }
 
     /**
+     * @return HasMany<EventTemplate, $this>
+     */
+    public function eventTemplates(): HasMany
+    {
+        return $this->hasMany(EventTemplate::class);
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>

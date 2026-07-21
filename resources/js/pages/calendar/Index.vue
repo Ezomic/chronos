@@ -14,13 +14,18 @@ import WeekGrid from '@/components/calendar/WeekGrid.vue';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { index as calendarIndex } from '@/routes/calendar';
-import type { CalendarEvent, WritableCalendar } from '@/types/calendar';
+import type {
+    CalendarEvent,
+    EventTemplate,
+    WritableCalendar,
+} from '@/types/calendar';
 
 const props = defineProps<{
     view: string;
     date: string;
     events: CalendarEvent[];
     calendars: WritableCalendar[];
+    templates: EventTemplate[];
 }>();
 
 const sheetOpen = ref(false);
@@ -182,6 +187,7 @@ const views = [
             :event="activeEvent"
             :default-date="activeDate"
             :calendars="props.calendars"
+            :templates="props.templates"
         />
     </div>
 </template>
