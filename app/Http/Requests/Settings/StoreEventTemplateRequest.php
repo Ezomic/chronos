@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace App\Http\Requests;
+namespace App\Http\Requests\Settings;
 
 use App\Concerns\ValidatesWritableCalendar;
 use App\Models\Event;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class StoreEventRequest extends FormRequest
+class StoreEventTemplateRequest extends FormRequest
 {
     use ValidatesWritableCalendar;
 
@@ -24,16 +24,15 @@ class StoreEventRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'calendar_id' => ['required', $this->writableCalendarRule()],
+            'name' => ['required', 'string', 'max:60'],
+            'calendar_id' => ['nullable', $this->writableCalendarRule()],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'location' => ['nullable', 'string', 'max:255'],
             'all_day' => ['boolean'],
-            'timezone' => ['nullable', 'timezone:all'],
-            'starts_at' => ['required', 'date'],
-            'ends_at' => ['required', 'date', $this->boolean('all_day') ? 'after_or_equal:starts_at' : 'after:starts_at'],
-            'frequency' => ['nullable', Rule::in(['none', 'daily', 'weekly', 'monthly', 'yearly'])],
-            'until' => ['nullable', 'date', 'after_or_equal:starts_at'],
+            'duration_minutes' => ['required', 'integer', 'min:1'],
+            'default_start_time' => ['nullable', 'date_format:H:i'],
+            'frequency' => ['nullable', Rule::in(['daily', 'weekly', 'monthly', 'yearly'])],
             'reminder_minutes' => ['nullable', 'integer', Rule::in(Event::REMINDER_CHOICES)],
         ];
     }

@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
-use App\Concerns\InteractsWithCurrentUser;
+use App\Concerns\ValidatesWritableCalendar;
 use App\Models\Event;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class UpdateEventRequest extends FormRequest
 {
-    use InteractsWithCurrentUser;
+    use ValidatesWritableCalendar;
 
     public function authorize(): bool
     {
@@ -24,12 +24,7 @@ class UpdateEventRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'calendar_id' => [
-                'required',
-                Rule::exists('calendars', 'id')->where(fn ($query) => $query
-                    ->where('user_id', $this->currentUser()->id)
-                    ->where('is_writable', true)),
-            ],
+            'calendar_id' => ['required', $this->writableCalendarRule()],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'location' => ['nullable', 'string', 'max:255'],
