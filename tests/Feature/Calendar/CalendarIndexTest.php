@@ -119,3 +119,31 @@ it('serializes editable=false for events on read-only mirrored calendars', funct
             ->where('events.0.calendar_name', 'Work (Google)')
             ->where('events.0.editable', false));
 });
+
+it('filters agenda events by a search query (title or location)', function () {
+    $user = User::factory()->create();
+    $calendar = calendarFor($user);
+    $anchor = CarbonImmutable::today();
+    Event::factory()->for($calendar)->create(['title' => 'Dentist appointment', 'starts_at' => $anchor->addDays(2)->setTime(10, 0), 'ends_at' => $anchor->addDays(2)->setTime(11, 0)]);
+    Event::factory()->for($calendar)->create(['title' => 'Team lunch', 'location' => 'Zoom', 'starts_at' => $anchor->addDays(3)->setTime(12, 0), 'ends_at' => $anchor->addDays(3)->setTime(13, 0)]);
+
+    $this->actingAs($user)
+        ->get(route('calendar.index', ['view' => 'agenda', 'q' => 'zoom']))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('view', 'agenda')
+            ->where('query', 'zoom')
+            ->has('events', 1)
+            ->where('events.0.title', 'Team lunch'));
+});
+
+it('lists only upcoming events within the agenda window', function () {
+    $user = User::factory()->create();
+    $calendar = calendarFor($user);
+    $anchor = CarbonImmutable::today();
+    Event::factory()->for($calendar)->create(['starts_at' => $anchor->addDays(3)->setTime(9, 0), 'ends_at' => $anchor->addDays(3)->setTime(10, 0)]);
+    Event::factory()->for($calendar)->create(['starts_at' => $anchor->addDays(60)->setTime(9, 0), 'ends_at' => $anchor->addDays(60)->setTime(10, 0)]);
+
+    $this->actingAs($user)
+        ->get(route('calendar.index', ['view' => 'agenda']))
+        ->assertInertia(fn (AssertableInertia $page) => $page->has('events', 1));
+});
