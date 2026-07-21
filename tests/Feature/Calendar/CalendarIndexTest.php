@@ -91,3 +91,31 @@ it('falls back to today when the date parameter is malformed', function () {
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('date', CarbonImmutable::today()->toDateString()));
 });
+
+it('serializes calendar_name and editable=true for writable events', function () {
+    $user = User::factory()->create();
+    $calendar = Calendar::factory()->for($user)->create(['name' => 'My Calendar', 'is_writable' => true, 'is_visible' => true]);
+    $anchor = CarbonImmutable::today()->startOfMonth()->addDays(10);
+    Event::factory()->for($calendar)->create(['starts_at' => $anchor->setTime(9, 0), 'ends_at' => $anchor->setTime(10, 0)]);
+
+    $this->actingAs($user)
+        ->get(route('calendar.index'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('events', 1)
+            ->where('events.0.calendar_name', 'My Calendar')
+            ->where('events.0.editable', true));
+});
+
+it('serializes editable=false for events on read-only mirrored calendars', function () {
+    $user = User::factory()->create();
+    $calendar = Calendar::factory()->mirrored()->for($user)->create(['name' => 'Work (Google)', 'is_visible' => true]);
+    $anchor = CarbonImmutable::today()->startOfMonth()->addDays(10);
+    Event::factory()->for($calendar)->create(['starts_at' => $anchor->setTime(9, 0), 'ends_at' => $anchor->setTime(10, 0)]);
+
+    $this->actingAs($user)
+        ->get(route('calendar.index'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('events', 1)
+            ->where('events.0.calendar_name', 'Work (Google)')
+            ->where('events.0.editable', false));
+});
