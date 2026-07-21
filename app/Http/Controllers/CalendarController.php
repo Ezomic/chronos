@@ -59,7 +59,7 @@ class CalendarController extends Controller
             ->whereNull('rrule')
             ->where('starts_at', '<', $to)
             ->where('ends_at', '>', $from)
-            ->with('calendar:id,color')
+            ->with('calendar:id,name,color,is_writable')
             ->get();
 
         // Recurring masters whose series could produce an occurrence in the
@@ -68,7 +68,7 @@ class CalendarController extends Controller
             ->whereHas('calendar', $ownedVisible)
             ->whereNotNull('rrule')
             ->where('starts_at', '<', $to)
-            ->with('calendar:id,color')
+            ->with('calendar:id,name,color,is_writable')
             ->get();
 
         $events = collect();
@@ -120,6 +120,10 @@ class CalendarController extends Controller
             'key' => $event->id.'|'.$startsAt->toIso8601String(),
             'id' => $event->id,
             'calendar_id' => $event->calendar_id,
+            'calendar_name' => $event->calendar->name ?? '',
+            // Mirrored (non-writable) calendars are read-only; the sheet shows
+            // their events as read-only instead of an editable form.
+            'editable' => (bool) ($event->calendar->is_writable ?? false),
             'title' => $event->title,
             'description' => $event->description,
             // whereHas('calendar') already guarantees the relation, so this only

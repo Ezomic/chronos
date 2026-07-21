@@ -110,7 +110,41 @@ const savingTemplate = ref(false);
 
 const source = computed(() => (props.event ? sourceLink(props.event) : null));
 
+// Events on read-only mirrored calendars (Google/Microsoft) can't be edited,
+// and their calendar isn't in the writable list the form's picker is built
+// from, so they're shown as a read-only detail view instead.
+const readOnly = computed(() => !!props.event && !props.event.editable);
+
 const pad = (n: number) => String(n).padStart(2, '0');
+
+const whenText = computed(() => {
+    if (!props.event) {
+        return '';
+    }
+
+    const fmtDate = (s: string) => {
+        const [y, m, d] = s.slice(0, 10).split('-').map(Number);
+
+        return new Intl.DateTimeFormat('en-GB', {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+        }).format(new Date(y, m - 1, d));
+    };
+    const time = (s: string) => (s.length >= 16 ? s.slice(11, 16) : '');
+    const sameDay = form.start.slice(0, 10) === form.end.slice(0, 10);
+
+    if (form.all_day) {
+        return sameDay
+            ? fmtDate(form.start)
+            : `${fmtDate(form.start)} – ${fmtDate(form.end)}`;
+    }
+
+    return sameDay
+        ? `${fmtDate(form.start)}, ${time(form.start)} – ${time(form.end)}`
+        : `${fmtDate(form.start)} ${time(form.start)} – ${fmtDate(form.end)} ${time(form.end)}`;
+});
 
 function localDateTime(iso: string, timezone: string): string {
     const z = parseAbsolute(iso, timezone);
@@ -399,18 +433,70 @@ function remove(): void {
         <SheetContent class="flex w-full flex-col gap-0 sm:max-w-md">
             <SheetHeader>
                 <SheetTitle>{{
-                    event ? 'Edit event' : 'New event'
+                    readOnly ? 'Event' : event ? 'Edit event' : 'New event'
                 }}</SheetTitle>
                 <SheetDescription>
                     {{
-                        event
-                            ? 'Update the details of this event.'
-                            : 'Add an event to your calendar.'
+                        readOnly
+                            ? 'Synced from a connected calendar. Read-only.'
+                            : event
+                              ? 'Update the details of this event.'
+                              : 'Add an event to your calendar.'
                     }}
                 </SheetDescription>
             </SheetHeader>
 
+            <div
+                v-if="readOnly && event"
+                class="flex flex-1 flex-col gap-5 overflow-y-auto px-4 py-4"
+            >
+                <div class="flex items-start gap-2">
+                    <span
+                        class="mt-1 size-3 shrink-0 rounded-full"
+                        :style="{ backgroundColor: event.color }"
+                    />
+                    <div class="min-w-0">
+                        <p class="text-base leading-tight font-medium">
+                            {{ event.title }}
+                        </p>
+                        <p class="text-sm text-muted-foreground">
+                            {{ event.calendar_name }}
+                        </p>
+                    </div>
+                </div>
+
+                <div class="grid gap-1">
+                    <span
+                        class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                    >
+                        When
+                    </span>
+                    <p class="text-sm">{{ whenText }}</p>
+                </div>
+
+                <div v-if="event.location" class="grid gap-1">
+                    <span
+                        class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                    >
+                        Location
+                    </span>
+                    <p class="text-sm">{{ event.location }}</p>
+                </div>
+
+                <div v-if="event.description" class="grid gap-1">
+                    <span
+                        class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                    >
+                        Description
+                    </span>
+                    <p class="text-sm whitespace-pre-wrap">
+                        {{ event.description }}
+                    </p>
+                </div>
+            </div>
+
             <form
+                v-else
                 class="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-2"
                 @submit.prevent="submit"
             >
@@ -575,7 +661,12 @@ function remove(): void {
                 </div>
             </form>
 
-            <SheetFooter class="flex-row justify-between gap-2">
+            <SheetFooter v-if="readOnly" class="flex-row justify-end">
+                <Button type="button" variant="outline" @click="close">
+                    Close
+                </Button>
+            </SheetFooter>
+            <SheetFooter v-else class="flex-row justify-between gap-2">
                 <Button
                     v-if="event"
                     type="button"
