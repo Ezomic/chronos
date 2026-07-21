@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Calendar;
+use App\Models\ConnectedAccount;
 use App\Models\Event;
 use App\Models\User;
 
@@ -131,4 +132,51 @@ it('forbids deleting another user\'s calendar', function () {
     $this->actingAs($user)
         ->delete(route('calendars.destroy', $other))
         ->assertForbidden();
+});
+
+it('flags a connected account whose sync errored as needing reconnect', function () {
+    $user = User::factory()->create();
+    ConnectedAccount::factory()->for($user)->create([
+        'provider' => 'google',
+        'sync_status' => 'error',
+        'sync_error' => 'Token has been expired or revoked.',
+        'last_synced_at' => now()->subDay(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('calendars.edit'))
+        ->assertInertia(fn ($page) => $page
+            ->where('accounts.0.needs_reconnect', true)
+            ->where('accounts.0.sync_error', 'Token has been expired or revoked.'));
+});
+
+it('does not flag a freshly synced account', function () {
+    $user = User::factory()->create();
+    ConnectedAccount::factory()->for($user)->create([
+        'provider' => 'google',
+        'sync_status' => 'idle',
+        'last_synced_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('calendars.edit'))
+        ->assertInertia(fn ($page) => $page
+            ->where('accounts.0.needs_reconnect', false)
+            ->where('accounts.0.is_stale', false)
+            ->where('accounts.0.sync_error', null));
+});
+
+it('marks an idle account not synced in over an hour as stale', function () {
+    $user = User::factory()->create();
+    ConnectedAccount::factory()->for($user)->create([
+        'provider' => 'google',
+        'sync_status' => 'idle',
+        'last_synced_at' => now()->subHours(3),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('calendars.edit'))
+        ->assertInertia(fn ($page) => $page
+            ->where('accounts.0.is_stale', true)
+            ->where('accounts.0.needs_reconnect', false));
 });

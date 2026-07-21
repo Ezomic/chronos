@@ -51,6 +51,15 @@ class CalendarController extends Controller
                 'email' => $account->email_address,
                 'display_name' => $account->display_name,
                 'sync_status' => $account->sync_status,
+                // A failed sync (e.g. an expired/revoked refresh token) needs the
+                // user to re-consent; surface the error and a reconnect prompt.
+                'needs_reconnect' => $account->sync_status === 'error',
+                'sync_error' => $account->sync_status === 'error' ? $account->sync_error : null,
+                // Silently behind: idle but not refreshed in a while (sync runs
+                // every 15 minutes), so something quietly stopped keeping it fresh.
+                'is_stale' => $account->sync_status === 'idle'
+                    && $account->last_synced_at !== null
+                    && $account->last_synced_at->lt(now()->subHour()),
                 'last_synced_at_diff' => $account->last_synced_at?->diffForHumans(),
             ])
             ->values();
