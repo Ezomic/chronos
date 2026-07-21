@@ -9,6 +9,7 @@ import {
     Plug,
     Plus,
     Trash2,
+    TriangleAlert,
 } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import CalendarController from '@/actions/App/Http/Controllers/Settings/CalendarController';
@@ -48,6 +49,9 @@ interface ConnectedAccount {
     email: string;
     display_name: string | null;
     sync_status: string;
+    needs_reconnect: boolean;
+    sync_error: string | null;
+    is_stale: boolean;
     last_synced_at_diff: string | null;
 }
 
@@ -251,30 +255,83 @@ function disconnect(id: number): void {
                 <div
                     v-for="account in accounts"
                     :key="account.id"
-                    class="flex items-center justify-between rounded-lg border p-3"
+                    class="rounded-lg border p-3"
+                    :class="{
+                        'border-amber-500/50': account.needs_reconnect,
+                    }"
                 >
-                    <div class="flex items-center gap-3">
-                        <CalendarDays class="size-5 text-muted-foreground" />
-                        <div>
-                            <p class="text-sm font-medium">
-                                {{ account.email }}
-                            </p>
-                            <p class="text-xs text-muted-foreground">
-                                {{ providerLabel(account.provider) }}
-                                <span v-if="account.last_synced_at_diff">
-                                    · synced {{ account.last_synced_at_diff }}
-                                </span>
-                                <span v-else>· not synced yet</span>
-                            </p>
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="flex min-w-0 items-center gap-3">
+                            <CalendarDays
+                                class="size-5 shrink-0 text-muted-foreground"
+                            />
+                            <div class="min-w-0">
+                                <p class="truncate text-sm font-medium">
+                                    {{ account.email }}
+                                </p>
+                                <p class="truncate text-xs text-muted-foreground">
+                                    {{ providerLabel(account.provider) }}
+                                    <span
+                                        v-if="account.needs_reconnect"
+                                        class="text-amber-600 dark:text-amber-500"
+                                    >
+                                        · sync failed
+                                    </span>
+                                    <template v-else-if="account.is_stale">
+                                        <span
+                                            class="text-amber-600 dark:text-amber-500"
+                                        >
+                                            · last synced
+                                            {{ account.last_synced_at_diff }}
+                                        </span>
+                                    </template>
+                                    <template v-else>
+                                        <span v-if="account.last_synced_at_diff">
+                                            · synced
+                                            {{ account.last_synced_at_diff }}
+                                        </span>
+                                        <span v-else>· not synced yet</span>
+                                    </template>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex shrink-0 gap-2">
+                            <Button
+                                v-if="account.needs_reconnect"
+                                size="sm"
+                                as-child
+                            >
+                                <a :href="oauthRedirect(account.provider).url">
+                                    <Plug class="size-4" />
+                                    Reconnect
+                                </a>
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                @click="disconnect(account.id)"
+                            >
+                                Disconnect
+                            </Button>
                         </div>
                     </div>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        @click="disconnect(account.id)"
+
+                    <div
+                        v-if="account.needs_reconnect"
+                        class="mt-2 flex items-start gap-2 rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
                     >
-                        Disconnect
-                    </Button>
+                        <TriangleAlert class="mt-0.5 size-4 shrink-0" />
+                        <span>
+                            Syncing stopped, so this calendar is no longer
+                            updating. Reconnect to fix it.
+                            <span
+                                v-if="account.sync_error"
+                                class="opacity-80"
+                            >
+                                ({{ account.sync_error }})
+                            </span>
+                        </span>
+                    </div>
                 </div>
             </div>
 
