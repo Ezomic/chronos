@@ -7,6 +7,7 @@ import {
 } from '@internationalized/date';
 import { ExternalLink } from '@lucide/vue';
 import { computed, reactive, ref, watch } from 'vue';
+import TimeSelect from '@/components/TimeSelect.vue';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -198,6 +199,35 @@ watch(
         }
     },
 );
+
+// Split the combined "YYYY-MM-DDTHH:MM" start/end into a native date input and
+// a locale-independent 24-hour TimeSelect.
+const timePart = (dt: string) => (dt.length >= 16 ? dt.slice(11, 16) : '09:00');
+
+const startDate = computed({
+    get: () => form.start.slice(0, 10),
+    set: (v: string) => {
+        form.start = form.all_day ? v : `${v}T${timePart(form.start)}`;
+    },
+});
+const startTime = computed({
+    get: () => timePart(form.start),
+    set: (v: string) => {
+        form.start = `${form.start.slice(0, 10)}T${v}`;
+    },
+});
+const endDate = computed({
+    get: () => form.end.slice(0, 10),
+    set: (v: string) => {
+        form.end = form.all_day ? v : `${v}T${timePart(form.end)}`;
+    },
+});
+const endTime = computed({
+    get: () => timePart(form.end),
+    set: (v: string) => {
+        form.end = `${form.end.slice(0, 10)}T${v}`;
+    },
+});
 
 function payload() {
     return {
@@ -466,19 +496,21 @@ function remove(): void {
                         <Label for="start">Starts</Label>
                         <Input
                             id="start"
-                            v-model="form.start"
-                            :type="form.all_day ? 'date' : 'datetime-local'"
+                            v-model="startDate"
+                            type="date"
                             required
                         />
+                        <TimeSelect v-if="!form.all_day" v-model="startTime" />
                     </div>
                     <div class="grid gap-2">
                         <Label for="end">Ends</Label>
                         <Input
                             id="end"
-                            v-model="form.end"
-                            :type="form.all_day ? 'date' : 'datetime-local'"
+                            v-model="endDate"
+                            type="date"
                             required
                         />
+                        <TimeSelect v-if="!form.all_day" v-model="endTime" />
                     </div>
                 </div>
                 <p v-if="errors.ends_at" class="text-sm text-destructive">
