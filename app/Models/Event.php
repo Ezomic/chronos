@@ -22,6 +22,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $rrule
  * @property int|null $reminder_minutes
  * @property Carbon|null $reminder_sent_at
+ * @property Carbon|null $reminder_sent_for
  * @property string|null $external_id
  * @property string|null $external_etag
  * @property string|null $source_app
@@ -43,6 +44,7 @@ use Illuminate\Support\Carbon;
     'rrule',
     'reminder_minutes',
     'reminder_sent_at',
+    'reminder_sent_for',
     'external_id',
     'external_etag',
     'source_app',
@@ -77,6 +79,7 @@ class Event extends Model
             'all_day' => 'boolean',
             'reminder_minutes' => 'integer',
             'reminder_sent_at' => 'datetime',
+            'reminder_sent_for' => 'datetime',
         ];
     }
 }
