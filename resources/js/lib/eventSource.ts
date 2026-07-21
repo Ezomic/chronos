@@ -5,6 +5,7 @@ import type { CalendarEvent } from '@/types/calendar';
 const KNOWN_SOURCES: Record<string, string> = {
     zero: 'Open in Mail',
     tracker: 'Open in Tracker',
+    tempo: 'Open in Tempo',
 };
 
 export interface SourceLink {
