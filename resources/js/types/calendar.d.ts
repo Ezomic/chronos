@@ -34,3 +34,22 @@ export interface WritableCalendar {
     color: string;
     is_default: boolean;
 }
+
+export interface EventTemplate {
+    id: number;
+    name: string;
+    /** Calendar events land on; null falls back to the default calendar. */
+    calendar_id: number | null;
+    title: string;
+    description: string | null;
+    location: string | null;
+    all_day: boolean;
+    /** Timed: length in minutes. All-day: days x 1440. */
+    duration_minutes: number;
+    /** "HH:MM" to default the start time to, or null. */
+    default_start_time: string | null;
+    /** Repeat pattern (daily/weekly/monthly/yearly), or null when it does not repeat. */
+    frequency: string | null;
+    /** Minutes before start to remind, or null for no reminder. */
+    reminder_minutes: number | null;
+}

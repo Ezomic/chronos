@@ -8,6 +8,15 @@ import {
 import { ExternalLink } from '@lucide/vue';
 import { computed, reactive, ref, watch } from 'vue';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -18,15 +27,22 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet';
+import { reminderOptions, repeatOptions } from '@/lib/eventOptions';
 import { sourceLink } from '@/lib/eventSource';
+import { store as storeTemplate } from '@/routes/event-templates';
 import { destroy, store, update } from '@/routes/events';
-import type { CalendarEvent, WritableCalendar } from '@/types/calendar';
+import type {
+    CalendarEvent,
+    EventTemplate,
+    WritableCalendar,
+} from '@/types/calendar';
 
 const props = defineProps<{
     open: boolean;
     event: CalendarEvent | null;
     defaultDate: string | null;
     calendars: WritableCalendar[];
+    templates: EventTemplate[];
 }>();
 
 const emit = defineEmits<{ 'update:open': [boolean] }>();
@@ -57,26 +73,6 @@ const form = reactive<FormState>({
     reminder: 'none',
 });
 
-const reminderOptions = [
-    { value: 'none', label: 'No reminder' },
-    { value: '0', label: 'At start time' },
-    { value: '5', label: '5 minutes before' },
-    { value: '10', label: '10 minutes before' },
-    { value: '15', label: '15 minutes before' },
-    { value: '30', label: '30 minutes before' },
-    { value: '60', label: '1 hour before' },
-    { value: '120', label: '2 hours before' },
-    { value: '1440', label: '1 day before' },
-];
-
-const repeatOptions = [
-    { value: 'none', label: 'Does not repeat' },
-    { value: 'daily', label: 'Daily' },
-    { value: 'weekly', label: 'Weekly' },
-    { value: 'monthly', label: 'Monthly' },
-    { value: 'yearly', label: 'Yearly' },
-];
-
 const FREQ_MAP: Record<string, string> = {
     DAILY: 'daily',
     WEEKLY: 'weekly',
@@ -104,6 +100,13 @@ function parseRrule(rrule: string | null): {
 const errors = ref<Record<string, string>>({});
 const processing = ref(false);
 
+const selectedTemplateId = ref<number | null>(null);
+
+const saveOpen = ref(false);
+const templateName = ref('');
+const templateError = ref('');
+const savingTemplate = ref(false);
+
 const source = computed(() => (props.event ? sourceLink(props.event) : null));
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -116,6 +119,7 @@ function localDateTime(iso: string, timezone: string): string {
 
 function hydrate(): void {
     errors.value = {};
+    selectedTemplateId.value = null;
     const fallback =
         props.calendars.find((c) => c.is_default) ?? props.calendars[0];
 
@@ -212,6 +216,114 @@ function payload() {
     };
 }
 
+function formatLocal(d: Date, withTime: boolean): string {
+    const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+    return withTime
+        ? `${date}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+        : date;
+}
+
+function applyTemplate(template: EventTemplate): void {
+    const date = props.defaultDate ?? new Date().toISOString().slice(0, 10);
+    const [y, m, dd] = date.split('-').map(Number);
+
+    form.calendar_id =
+        template.calendar_id ??
+        props.calendars.find((c) => c.is_default)?.id ??
+        props.calendars[0]?.id ??
+        null;
+    form.title = template.title;
+    form.description = template.description ?? '';
+    form.location = template.location ?? '';
+    form.all_day = template.all_day;
+    form.frequency = template.frequency ?? 'none';
+    form.until = '';
+    form.reminder =
+        template.reminder_minutes === null
+            ? 'none'
+            : String(template.reminder_minutes);
+
+    if (template.all_day) {
+        // duration is whole days; the end input is the inclusive last day.
+        const days = Math.max(1, Math.round(template.duration_minutes / 1440));
+        form.start = formatLocal(new Date(y, m - 1, dd), false);
+        form.end = formatLocal(new Date(y, m - 1, dd + days - 1), false);
+    } else {
+        const [h, min] = (template.default_start_time ?? '09:00')
+            .split(':')
+            .map(Number);
+        const start = new Date(y, m - 1, dd, h, min);
+        const end = new Date(
+            start.getTime() + template.duration_minutes * 60000,
+        );
+        form.start = formatLocal(start, true);
+        form.end = formatLocal(end, true);
+    }
+}
+
+function onTemplateChange(id: number | null): void {
+    selectedTemplateId.value = id;
+    const template = props.templates.find((t) => t.id === id);
+
+    if (template) {
+        applyTemplate(template);
+    }
+}
+
+function templatePayload() {
+    let durationMinutes: number;
+
+    if (form.all_day) {
+        const start = new Date(`${form.start.slice(0, 10)}T00:00`).getTime();
+        const end = new Date(`${form.end.slice(0, 10)}T00:00`).getTime();
+        // The end input is the inclusive last day, so it counts as a full day.
+        durationMinutes = Math.round((end - start) / 60000) + 1440;
+    } else {
+        const start = new Date(form.start).getTime();
+        const end = new Date(form.end).getTime();
+        durationMinutes = Math.round((end - start) / 60000);
+    }
+
+    return {
+        name: templateName.value,
+        calendar_id: form.calendar_id,
+        title: form.title,
+        description: form.description || null,
+        location: form.location || null,
+        all_day: form.all_day,
+        duration_minutes: durationMinutes,
+        default_start_time: form.all_day ? null : form.start.slice(11, 16),
+        frequency: form.frequency === 'none' ? null : form.frequency,
+        reminder_minutes:
+            form.reminder === 'none' ? null : Number(form.reminder),
+    };
+}
+
+function openSaveTemplate(): void {
+    templateName.value = form.title;
+    templateError.value = '';
+    saveOpen.value = true;
+}
+
+function saveTemplate(): void {
+    savingTemplate.value = true;
+    router.post(storeTemplate().url, templatePayload(), {
+        preserveScroll: true,
+        preserveState: true,
+        onError: (e: Record<string, string>) => {
+            templateError.value =
+                Object.values(e)[0] ?? 'Could not save template.';
+        },
+        onSuccess: () => {
+            saveOpen.value = false;
+        },
+        onFinish: () => {
+            savingTemplate.value = false;
+        },
+    });
+}
+
 function close(): void {
     emit('update:open', false);
 }
@@ -280,6 +392,34 @@ function remove(): void {
                     <ExternalLink class="size-4" />
                     {{ source.label }}
                 </a>
+
+                <div v-if="!event && templates.length" class="grid gap-2">
+                    <Label for="template">Start from template</Label>
+                    <select
+                        id="template"
+                        :value="selectedTemplateId ?? ''"
+                        class="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs"
+                        @change="
+                            onTemplateChange(
+                                ($event.target as HTMLSelectElement).value
+                                    ? Number(
+                                          ($event.target as HTMLSelectElement)
+                                              .value,
+                                      )
+                                    : null,
+                            )
+                        "
+                    >
+                        <option value="">Blank event</option>
+                        <option
+                            v-for="template in templates"
+                            :key="template.id"
+                            :value="template.id"
+                        >
+                            {{ template.name }}
+                        </option>
+                    </select>
+                </div>
 
                 <div class="grid gap-2">
                     <Label for="title">Title</Label>
@@ -413,6 +553,15 @@ function remove(): void {
                 >
                     Delete
                 </Button>
+                <Button
+                    v-else
+                    type="button"
+                    variant="outline"
+                    :disabled="processing || !form.title"
+                    @click="openSaveTemplate"
+                >
+                    Save as template
+                </Button>
                 <div class="ml-auto flex gap-2">
                     <Button type="button" variant="outline" @click="close">
                         Cancel
@@ -428,4 +577,47 @@ function remove(): void {
             </SheetFooter>
         </SheetContent>
     </Sheet>
+
+    <Dialog v-model:open="saveOpen">
+        <DialogContent>
+            <form class="space-y-5" @submit.prevent="saveTemplate">
+                <DialogHeader>
+                    <DialogTitle>Save as template</DialogTitle>
+                    <DialogDescription>
+                        Reuse this event's setup later without re-entering every
+                        field. The date is not stored.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div class="grid gap-2">
+                    <Label for="template-name">Template name</Label>
+                    <Input
+                        id="template-name"
+                        v-model="templateName"
+                        placeholder="e.g. Weekly 1:1"
+                        autocomplete="off"
+                        required
+                        autofocus
+                    />
+                    <p v-if="templateError" class="text-sm text-destructive">
+                        {{ templateError }}
+                    </p>
+                </div>
+
+                <DialogFooter class="gap-2">
+                    <DialogClose as-child>
+                        <Button variant="secondary" type="button">
+                            Cancel
+                        </Button>
+                    </DialogClose>
+                    <Button
+                        type="submit"
+                        :disabled="savingTemplate || !templateName"
+                    >
+                        Save template
+                    </Button>
+                </DialogFooter>
+            </form>
+        </DialogContent>
+    </Dialog>
 </template>
