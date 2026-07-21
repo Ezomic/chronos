@@ -10,3 +10,4 @@ Artisan::command('inspire', function () {
 
 Schedule::command('calendar:sync')->everyFifteenMinutes()->withoutOverlapping();
 Schedule::command('chronos:send-reminders')->everyMinute()->withoutOverlapping();
+Schedule::command('chronos:weekly-digest')->weeklyOn(1, '07:00')->withoutOverlapping();
