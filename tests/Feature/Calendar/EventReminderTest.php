@@ -124,15 +124,39 @@ it('does not remind for an event that already started', function () {
     Notification::assertNothingSent();
 });
 
-it('does not dispatch reminders for recurring events', function () {
+it('sends a reminder for a due recurring occurrence and stamps it once', function () {
+    Notification::fake();
+
+    $user = User::factory()->create();
+    $calendar = Calendar::factory()->for($user)->create();
+    $event = Event::factory()->for($calendar)->create([
+        'starts_at' => now()->addMinutes(5),
+        'ends_at' => now()->addMinutes(35),
+        'reminder_minutes' => 10, // due 5 minutes ago
+        'reminder_sent_at' => null,
+        'rrule' => 'FREQ=WEEKLY',
+    ]);
+
+    $this->artisan('chronos:send-reminders')->assertSuccessful();
+
+    Notification::assertSentTo($user, EventReminderNotification::class);
+    expect($event->refresh()->reminder_sent_for)->not->toBeNull();
+
+    // The same occurrence must not remind twice.
+    Notification::fake();
+    $this->artisan('chronos:send-reminders')->assertSuccessful();
+    Notification::assertNothingSent();
+});
+
+it('does not send a recurring reminder that is not yet due', function () {
     Notification::fake();
 
     $user = User::factory()->create();
     $calendar = Calendar::factory()->for($user)->create();
     Event::factory()->for($calendar)->create([
-        'starts_at' => now()->addMinutes(5),
-        'ends_at' => now()->addMinutes(35),
-        'reminder_minutes' => 10,
+        'starts_at' => now()->addHours(5),
+        'ends_at' => now()->addHours(6),
+        'reminder_minutes' => 10, // the next occurrence is hours away
         'reminder_sent_at' => null,
         'rrule' => 'FREQ=WEEKLY',
     ]);
