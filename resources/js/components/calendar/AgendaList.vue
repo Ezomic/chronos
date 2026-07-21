@@ -87,7 +87,7 @@ const groups = computed(() => {
                         :style="{ backgroundColor: event.color }"
                     />
                     <span
-                        class="w-16 shrink-0 text-sm tabular-nums text-muted-foreground"
+                        class="w-16 shrink-0 text-sm text-muted-foreground tabular-nums"
                     >
                         {{ timeLabel(event) }}
                     </span>
