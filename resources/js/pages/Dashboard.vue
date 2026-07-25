@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import {
-    CalendarPlus,
-    List,
-    TriangleAlert,
-} from '@lucide/vue';
+import { CalendarPlus, List, TriangleAlert } from '@lucide/vue';
 import { computed } from 'vue';
 import { Button } from '@/components/ui/button';
 import { dashboard } from '@/routes';
@@ -211,7 +207,7 @@ const agendaHref = calendar({ query: { view: 'agenda' } });
                         :style="{ backgroundColor: item.color }"
                     />
                     <span
-                        class="w-16 shrink-0 text-sm tabular-nums text-muted-foreground"
+                        class="w-16 shrink-0 text-sm text-muted-foreground tabular-nums"
                     >
                         {{ item.all_day ? 'All day' : time(item.starts_at) }}
                     </span>
@@ -226,9 +222,7 @@ const agendaHref = calendar({ query: { view: 'agenda' } });
                     </span>
                 </Link>
             </div>
-            <p v-else class="text-sm text-muted-foreground">
-                No events today.
-            </p>
+            <p v-else class="text-sm text-muted-foreground">No events today.</p>
         </div>
 
         <div v-if="upcoming.length" class="rounded-xl border p-5">
@@ -249,7 +243,7 @@ const agendaHref = calendar({ query: { view: 'agenda' } });
                         :style="{ backgroundColor: item.color }"
                     />
                     <span
-                        class="w-28 shrink-0 text-sm tabular-nums text-muted-foreground"
+                        class="w-28 shrink-0 text-sm text-muted-foreground tabular-nums"
                     >
                         {{ when(item) }}
                     </span>
@@ -261,4 +255,3 @@ const agendaHref = calendar({ query: { view: 'agenda' } });
         </div>
     </div>
 </template>
-
