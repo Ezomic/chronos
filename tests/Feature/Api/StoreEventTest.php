@@ -41,6 +41,25 @@ it('creates an event from a valid request with a source link', function () {
         ->and($event->starts_at->utc()->format('H:i'))->toBe('07:00');
 });
 
+it('accepts a tempo source app', function () {
+    Sanctum::actingAs(userWithDefaultCalendar(), ['events:create']);
+
+    $this->postJson('/api/events', [
+        'title' => 'Run: Easy 40 (40 min)',
+        'starts_at' => '2026-07-25',
+        'ends_at' => '2026-07-25',
+        'all_day' => true,
+        'source' => [
+            'app' => 'tempo',
+            'type' => 'planned-workout',
+            'id' => '42',
+            'url' => 'https://tempo.test/plan',
+        ],
+    ])->assertCreated();
+
+    expect(Event::query()->firstOrFail()->source_app)->toBe('tempo');
+});
+
 it('rejects an unauthenticated request', function () {
     $this->postJson('/api/events', ['title' => 'x'])->assertUnauthorized();
 });

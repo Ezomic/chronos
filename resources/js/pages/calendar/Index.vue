@@ -6,22 +6,30 @@ import {
     startOfWeek,
     today,
 } from '@internationalized/date';
-import { ChevronLeft, ChevronRight, Plus } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { ChevronLeft, ChevronRight, Plus, Search, X } from '@lucide/vue';
+import { computed, ref, watch } from 'vue';
+import AgendaList from '@/components/calendar/AgendaList.vue';
 import EventSheet from '@/components/calendar/EventSheet.vue';
 import MonthGrid from '@/components/calendar/MonthGrid.vue';
 import WeekGrid from '@/components/calendar/WeekGrid.vue';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { index as calendarIndex } from '@/routes/calendar';
 import { update as eventsUpdate } from '@/routes/events';
-import type { CalendarEvent, WritableCalendar } from '@/types/calendar';
+import type {
+    CalendarEvent,
+    EventTemplate,
+    WritableCalendar,
+} from '@/types/calendar';
 
 const props = defineProps<{
     view: string;
     date: string;
+    query: string;
     events: CalendarEvent[];
     calendars: WritableCalendar[];
+    templates: EventTemplate[];
 }>();
 
 const sheetOpen = ref(false);
@@ -91,11 +99,42 @@ defineOptions({
 const anchor = computed(() => parseDate(props.date));
 const todayKey = computed(() => today(getLocalTimeZone()).toString());
 
+const search = ref(props.query);
+
+function runSearch(): void {
+    router.get(
+        calendarIndex({
+            query: {
+                view: 'agenda',
+                date: props.date,
+                q: search.value || undefined,
+            },
+        }).url,
+        {},
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
+}
+
+// Debounce live searching so each keystroke doesn't fire a visit.
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+watch(search, () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(runSearch, 300);
+});
+
+function clearSearch(): void {
+    search.value = '';
+}
+
 const asDate = (d: { year: number; month: number; day: number }) =>
     new Date(d.year, d.month - 1, d.day);
 
 const heading = computed(() => {
     const a = anchor.value;
+
+    if (props.view === 'agenda') {
+        return props.query ? `Search: “${props.query}”` : 'Agenda';
+    }
 
     if (props.view === 'day') {
         return new Intl.DateTimeFormat('en-US', {
@@ -130,7 +169,9 @@ const step = (direction: 1 | -1) => {
             ? a.add({ days: direction })
             : props.view === 'week'
               ? a.add({ weeks: direction })
-              : a.set({ day: 1 }).add({ months: direction });
+              : props.view === 'agenda'
+                ? a.add({ days: direction * 30 })
+                : a.set({ day: 1 }).add({ months: direction });
 
     return moved.toString();
 };
@@ -139,7 +180,13 @@ const prev = computed(() => step(-1));
 const next = computed(() => step(1));
 
 const hrefFor = (date: string) =>
-    calendarIndex({ query: { view: props.view, date } });
+    calendarIndex({
+        query: {
+            view: props.view,
+            date,
+            q: props.view === 'agenda' && props.query ? props.query : undefined,
+        },
+    });
 
 const viewHref = (view: string) =>
     calendarIndex({ query: { view, date: props.date } });
@@ -148,6 +195,7 @@ const views = [
     { key: 'month', label: 'Month' },
     { key: 'week', label: 'Week' },
     { key: 'day', label: 'Day' },
+    { key: 'agenda', label: 'Agenda' },
 ];
 </script>
 
@@ -202,12 +250,42 @@ const views = [
             </div>
         </div>
 
+        <div
+            v-if="props.view === 'agenda'"
+            class="relative mx-auto w-full max-w-2xl"
+        >
+            <Search
+                class="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+                v-model="search"
+                placeholder="Search events…"
+                class="px-9"
+                @keyup.enter="runSearch"
+            />
+            <button
+                v-if="search"
+                type="button"
+                class="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Clear search"
+                @click="clearSearch"
+            >
+                <X class="size-4" />
+            </button>
+        </div>
+
         <MonthGrid
             v-if="props.view === 'month'"
             :anchor="props.date"
             :events="props.events"
             :today="todayKey"
             @select-day="openCreate"
+            @select-event="openEvent"
+        />
+        <AgendaList
+            v-else-if="props.view === 'agenda'"
+            :events="props.events"
+            :today="todayKey"
             @select-event="openEvent"
         />
         <WeekGrid
@@ -229,6 +307,7 @@ const views = [
             :default-start="activeStart"
             :default-end="activeEnd"
             :calendars="props.calendars"
+            :templates="props.templates"
         />
     </div>
 </template>

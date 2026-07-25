@@ -31,7 +31,7 @@ class StoreEventRequest extends FormRequest
             'source' => ['nullable', 'array'],
             // Only known apps: keeps source_url from becoming an open redirect
             // when the calendar later renders it as a link.
-            'source.app' => ['required_with:source', 'string', Rule::in(['zero', 'tracker'])],
+            'source.app' => ['required_with:source', 'string', Rule::in(['zero', 'tracker', 'tempo'])],
             'source.type' => ['required_with:source', 'string', 'max:40'],
             'source.id' => ['required_with:source', 'string', 'max:64'],
             'source.url' => ['required_with:source', 'url', 'max:2048'],
