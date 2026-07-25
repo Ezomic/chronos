@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { index as calendarIndex } from '@/routes/calendar';
+import { update as eventsUpdate } from '@/routes/events';
 import type {
     CalendarEvent,
     EventTemplate,
@@ -34,17 +35,59 @@ const props = defineProps<{
 const sheetOpen = ref(false);
 const activeEvent = ref<CalendarEvent | null>(null);
 const activeDate = ref<string | null>(null);
+const activeStart = ref<string | null>(null);
+const activeEnd = ref<string | null>(null);
 
 function openCreate(date: string | null = null): void {
     activeEvent.value = null;
     activeDate.value = date;
+    activeStart.value = null;
+    activeEnd.value = null;
     sheetOpen.value = true;
 }
 
 function openEvent(event: CalendarEvent): void {
     activeEvent.value = event;
     activeDate.value = null;
+    activeStart.value = null;
+    activeEnd.value = null;
     sheetOpen.value = true;
+}
+
+function openCreateRange({ start, end }: { start: string; end: string }): void {
+    activeEvent.value = null;
+    activeDate.value = null;
+    activeStart.value = start;
+    activeEnd.value = end;
+    sheetOpen.value = true;
+}
+
+function reschedule({
+    event,
+    start,
+    end,
+}: {
+    event: CalendarEvent;
+    start: string;
+    end: string;
+}): void {
+    router.patch(
+        eventsUpdate(event.id).url,
+        {
+            calendar_id: event.calendar_id,
+            title: event.title,
+            description: event.description,
+            location: event.location,
+            all_day: false,
+            timezone: event.timezone,
+            starts_at: start,
+            ends_at: end,
+            frequency: 'none',
+            until: null,
+            reminder_minutes: event.reminder_minutes,
+        },
+        { preserveScroll: true },
+    );
 }
 
 defineOptions({
@@ -253,12 +296,16 @@ const views = [
             :today="todayKey"
             @select-day="openCreate"
             @select-event="openEvent"
+            @create-range="openCreateRange"
+            @reschedule="reschedule"
         />
 
         <EventSheet
             v-model:open="sheetOpen"
             :event="activeEvent"
             :default-date="activeDate"
+            :default-start="activeStart"
+            :default-end="activeEnd"
             :calendars="props.calendars"
             :templates="props.templates"
         />
