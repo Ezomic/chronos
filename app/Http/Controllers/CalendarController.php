@@ -26,7 +26,7 @@ class CalendarController extends Controller
      * and there's no client-side event store to fall out of sync. Only events
      * overlapping the visible window are returned.
      */
-    private const VIEWS = ['month', 'week', 'day'];
+    private const VIEWS = ['month', 'week', 'day', 'agenda'];
 
     public function index(Request $request): Response
     {
@@ -34,10 +34,16 @@ class CalendarController extends Controller
         $view = in_array($view, self::VIEWS, true) ? $view : 'month';
 
         $anchor = $this->parseAnchor($request->string('date')->toString());
+        $search = $request->string('q')->trim()->toString();
 
         [$gridStart, $gridEnd] = match ($view) {
             'week' => [$anchor->startOfWeek(CarbonImmutable::MONDAY), $anchor->startOfWeek(CarbonImmutable::MONDAY)->addDays(7)],
             'day' => [$anchor, $anchor->addDay()],
+            // The agenda lists forward from the anchor; searching widens the
+            // window so matches aren't limited to the next month.
+            'agenda' => $search !== ''
+                ? [$anchor->subDays(30), $anchor->addDays(365)]
+                : [$anchor->startOfDay(), $anchor->addDays(30)],
             default => [
                 $anchor->startOfMonth()->startOfWeek(CarbonImmutable::MONDAY),
                 $anchor->startOfMonth()->startOfWeek(CarbonImmutable::MONDAY)->addDays(42),
@@ -53,13 +59,19 @@ class CalendarController extends Controller
             ->where('user_id', $this->currentUser()->id)
             ->where('is_visible', true);
 
+        $searchScope = fn ($query) => $query->where(fn ($inner) => $inner
+            ->where('title', 'like', "%{$search}%")
+            ->orWhere('location', 'like', "%{$search}%")
+            ->orWhere('description', 'like', "%{$search}%"));
+
         // Non-recurring events overlapping the window.
         $single = Event::query()
             ->whereHas('calendar', $ownedVisible)
             ->whereNull('rrule')
             ->where('starts_at', '<', $to)
             ->where('ends_at', '>', $from)
-            ->with('calendar:id,color')
+            ->when($search !== '', $searchScope)
+            ->with('calendar:id,name,color,is_writable')
             ->get();
 
         // Recurring masters whose series could produce an occurrence in the
@@ -68,7 +80,8 @@ class CalendarController extends Controller
             ->whereHas('calendar', $ownedVisible)
             ->whereNotNull('rrule')
             ->where('starts_at', '<', $to)
-            ->with('calendar:id,color')
+            ->when($search !== '', $searchScope)
+            ->with('calendar:id,name,color,is_writable')
             ->get();
 
         $events = collect();
@@ -92,11 +105,22 @@ class CalendarController extends Controller
             ->get(['id', 'name', 'color', 'is_default'])
             ->values();
 
+        $templates = $this->currentUser()->eventTemplates()
+            ->orderBy('name')
+            ->get([
+                'id', 'name', 'calendar_id', 'title', 'description', 'location',
+                'all_day', 'duration_minutes', 'default_start_time', 'frequency',
+                'reminder_minutes',
+            ])
+            ->values();
+
         return Inertia::render('calendar/Index', [
             'view' => $view,
             'date' => $anchor->toDateString(),
+            'query' => $search,
             'events' => $events,
             'calendars' => $calendars,
+            'templates' => $templates,
         ]);
     }
 
@@ -110,6 +134,10 @@ class CalendarController extends Controller
             'key' => $event->id.'|'.$startsAt->toIso8601String(),
             'id' => $event->id,
             'calendar_id' => $event->calendar_id,
+            'calendar_name' => $event->calendar->name ?? '',
+            // Mirrored (non-writable) calendars are read-only; the sheet shows
+            // their events as read-only instead of an editable form.
+            'editable' => (bool) ($event->calendar->is_writable ?? false),
             'title' => $event->title,
             'description' => $event->description,
             // whereHas('calendar') already guarantees the relation, so this only
