@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { getLocalTimeZone } from '@internationalized/date';
 import { Form, Head, router } from '@inertiajs/vue3';
 import {
     CalendarDays,
@@ -145,6 +146,7 @@ function resync(id: number): void {
 }
 
 // Subscribe to an ICS/webcal feed
+const localTimezone = getLocalTimeZone();
 const subscribeOpen = ref(false);
 const subscribeUrl = ref('');
 const subscribeName = ref('');
@@ -579,6 +581,8 @@ function openSubscribe(): void {
                         it read-only and keeps it up to date automatically.
                     </DialogDescription>
                 </DialogHeader>
+
+                <input type="hidden" name="timezone" :value="localTimezone" />
 
                 <div class="grid gap-2">
                     <Label for="subscribe-url">Feed URL</Label>

@@ -14,7 +14,7 @@ class SubscribeToIcsFeedAction
 {
     public function __construct(private readonly IcsCalendarService $ics) {}
 
-    public function handle(User $user, string $feedUrl, ?string $name = null): ConnectedAccount
+    public function handle(User $user, string $feedUrl, ?string $name = null, ?string $timezone = null): ConnectedAccount
     {
         $hash = hash('sha256', $feedUrl);
 
@@ -32,6 +32,7 @@ class SubscribeToIcsFeedAction
             'provider' => ConnectedAccount::PROVIDER_ICS,
             'feed_url' => $feedUrl,
             'feed_url_hash' => $hash,
+            'timezone' => $timezone,
             'display_name' => $name ?: ($remote['name'] ?? 'Subscribed calendar'),
             'is_active' => true,
             'sync_status' => 'idle',

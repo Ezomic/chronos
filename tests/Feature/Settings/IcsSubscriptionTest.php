@@ -24,7 +24,10 @@ it('subscribes to an ICS feed and dispatches an immediate sync', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user)
-        ->post(route('subscriptions.store'), ['url' => 'https://feeds.test/twente.ics'])
+        ->post(route('subscriptions.store'), [
+            'url' => 'https://feeds.test/twente.ics',
+            'timezone' => 'Europe/Amsterdam',
+        ])
         ->assertRedirect();
 
     $account = ConnectedAccount::query()
@@ -35,6 +38,7 @@ it('subscribes to an ICS feed and dispatches an immediate sync', function () {
     expect($account->feed_url)->toBe('https://feeds.test/twente.ics')
         ->and($account->feed_url_hash)->toBe(hash('sha256', 'https://feeds.test/twente.ics'))
         ->and($account->display_name)->toBe('FC Twente')
+        ->and($account->timezone)->toBe('Europe/Amsterdam')
         ->and($account->email_address)->toBeNull();
 
     Queue::assertPushed(SyncConnectedAccountJob::class);

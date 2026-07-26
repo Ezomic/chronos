@@ -41,6 +41,7 @@ class SyncConnectedAccountAction
             foreach ($source->calendars($token) as $remote) {
                 $calendar = $this->upsertCalendar($account, $remote);
                 $events = $source->events($token, $remote['external_id'], $from, $to);
+                $events = $this->applyDisplayTimezone($account, $events);
                 $this->syncEvents($calendar, $events, $from, $to);
             }
 
@@ -60,6 +61,29 @@ class SyncConnectedAccountAction
             ConnectedAccount::PROVIDER_ICS => $this->ics,
             default => throw new RuntimeException("No calendar source for provider {$account->provider}."),
         };
+    }
+
+    /**
+     * A feed publishes absolute instants, often in UTC. Displaying them in the
+     * subscriber's own zone (captured when they subscribed) shows local times
+     * instead of raw UTC. All-day events keep UTC so they stay on their date.
+     *
+     * @param  array<int, array<string, mixed>>  $events
+     * @return array<int, array<string, mixed>>
+     */
+    private function applyDisplayTimezone(ConnectedAccount $account, array $events): array
+    {
+        if ($account->provider !== ConnectedAccount::PROVIDER_ICS || $account->timezone === null) {
+            return $events;
+        }
+
+        return array_map(function (array $event) use ($account) {
+            if ($event['all_day'] === false) {
+                $event['timezone'] = $account->timezone;
+            }
+
+            return $event;
+        }, $events);
     }
 
     /**

@@ -183,6 +183,37 @@ it('is idempotent: re-syncing a feed makes no duplicates', function () {
     expect(Event::where('calendar_id', $calendar->id)->count())->toBe(1);
 });
 
+it('stamps the subscriber timezone on timed events but leaves all-day in UTC', function () {
+    $timed = CarbonImmutable::now('UTC')->addDays(5)->setTime(16, 45);
+    $day = CarbonImmutable::now('UTC')->addDays(7);
+
+    fakeIcsFeed(implode("\r\n", [
+        'BEGIN:VEVENT',
+        'UID:tz-timed',
+        'DTSTART:'.$timed->format('Ymd\THis\Z'),
+        'SUMMARY:Uitwedstrijd',
+        'END:VEVENT',
+        'BEGIN:VEVENT',
+        'UID:tz-allday',
+        'DTSTART;VALUE=DATE:'.$day->format('Ymd'),
+        'DTEND;VALUE=DATE:'.$day->addDay()->format('Ymd'),
+        'SUMMARY:Rustdag',
+        'END:VEVENT',
+    ]));
+
+    $account = icsAccount();
+    $account->update(['timezone' => 'Europe/Amsterdam']);
+    syncIcs($account);
+
+    // The UTC instant is unchanged; only the display zone is localized.
+    $timedEvent = Event::query()->where('external_id', 'tz-timed')->firstOrFail();
+    expect($timedEvent->timezone)->toBe('Europe/Amsterdam')
+        ->and($timedEvent->starts_at->format('H:i'))->toBe('16:45');
+
+    $allDayEvent = Event::query()->where('external_id', 'tz-allday')->firstOrFail();
+    expect($allDayEvent->timezone)->toBe('UTC');
+});
+
 it('records the error and rethrows when the feed is unreachable', function () {
     Http::fake(['feeds.test/*' => Http::response('nope', 500)]);
 

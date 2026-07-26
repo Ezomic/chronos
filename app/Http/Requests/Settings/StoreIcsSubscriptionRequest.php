@@ -34,6 +34,7 @@ class StoreIcsSubscriptionRequest extends FormRequest
         return [
             'url' => ['required', 'string', 'url:http,https', 'max:2048'],
             'name' => ['nullable', 'string', 'max:60'],
+            'timezone' => ['nullable', 'string', 'timezone'],
         ];
     }
 }

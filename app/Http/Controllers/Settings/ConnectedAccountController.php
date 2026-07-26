@@ -43,6 +43,7 @@ class ConnectedAccountController extends Controller
             $this->currentUser(),
             $request->string('url')->toString(),
             $request->filled('name') ? $request->string('name')->toString() : null,
+            $request->filled('timezone') ? $request->string('timezone')->toString() : null,
         );
 
         return back()->with('status', 'Calendar subscription added.');

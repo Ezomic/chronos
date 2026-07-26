@@ -18,6 +18,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $email_address
  * @property string|null $feed_url
  * @property string|null $feed_url_hash
+ * @property string|null $timezone
  * @property string|null $display_name
  * @property string|null $oauth_access_token
  * @property string|null $oauth_refresh_token
@@ -36,6 +37,7 @@ use Illuminate\Support\Carbon;
     'email_address',
     'feed_url',
     'feed_url_hash',
+    'timezone',
     'display_name',
     'oauth_access_token',
     'oauth_refresh_token',
