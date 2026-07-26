@@ -9,6 +9,7 @@ use App\Models\ConnectedAccount;
 use App\Models\Event;
 use App\Services\Calendar\CalendarSource;
 use App\Services\Calendar\GoogleCalendarService;
+use App\Services\Calendar\IcsCalendarService;
 use App\Services\Calendar\MicrosoftCalendarService;
 use App\Services\Calendar\OAuthTokenRefresher;
 use Carbon\CarbonImmutable;
@@ -20,6 +21,7 @@ class SyncConnectedAccountAction
         private readonly OAuthTokenRefresher $refresher,
         private readonly GoogleCalendarService $google,
         private readonly MicrosoftCalendarService $microsoft,
+        private readonly IcsCalendarService $ics,
     ) {}
 
     public function handle(ConnectedAccount $account): void
@@ -28,7 +30,7 @@ class SyncConnectedAccountAction
 
         try {
             $source = $this->sourceFor($account);
-            $token = $this->refresher->freshAccessToken($account);
+            $token = $this->credentialFor($account);
 
             // Windowed full refresh. Not sync tokens: Google's syncToken is
             // mutually exclusive with timeMin/timeMax, so it would drag in every
@@ -55,8 +57,22 @@ class SyncConnectedAccountAction
         return match ($account->provider) {
             ConnectedAccount::PROVIDER_GOOGLE => $this->google,
             ConnectedAccount::PROVIDER_MICROSOFT => $this->microsoft,
+            ConnectedAccount::PROVIDER_ICS => $this->ics,
             default => throw new RuntimeException("No calendar source for provider {$account->provider}."),
         };
+    }
+
+    /**
+     * The locator a source needs to read a feed: an OAuth access token for the
+     * account providers, the feed URL for ICS subscriptions.
+     */
+    private function credentialFor(ConnectedAccount $account): string
+    {
+        if ($account->provider === ConnectedAccount::PROVIDER_ICS) {
+            return $account->feed_url ?? throw new RuntimeException("ICS account {$account->id} has no feed URL.");
+        }
+
+        return $this->refresher->freshAccessToken($account);
     }
 
     /**

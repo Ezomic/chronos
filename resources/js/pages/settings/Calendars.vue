@@ -8,11 +8,14 @@ import {
     Pencil,
     Plug,
     Plus,
+    RefreshCw,
+    Rss,
     Trash2,
     TriangleAlert,
 } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import CalendarController from '@/actions/App/Http/Controllers/Settings/CalendarController';
+import ConnectedAccountController from '@/actions/App/Http/Controllers/Settings/ConnectedAccountController';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -29,7 +32,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { edit as editCalendars, visibility } from '@/routes/calendars';
-import { destroy as disconnectAccount } from '@/routes/connected-accounts';
+import {
+    destroy as disconnectAccount,
+    resync as resyncAccount,
+} from '@/routes/connected-accounts';
 import { redirect as oauthRedirect } from '@/routes/oauth';
 
 interface ManagedCalendar {
@@ -46,7 +52,8 @@ interface ManagedCalendar {
 interface ConnectedAccount {
     id: number;
     provider: string;
-    email: string;
+    is_subscription: boolean;
+    email: string | null;
     display_name: string | null;
     sync_status: string;
     needs_reconnect: boolean;
@@ -79,7 +86,9 @@ const providers = [
     { key: 'microsoft', label: 'Microsoft (Outlook)' },
 ];
 const providerLabel = (key: string | null) =>
-    providers.find((p) => p.key === key)?.label ?? key ?? 'Subscribed';
+    key === 'ics'
+        ? 'Subscribed feed'
+        : (providers.find((p) => p.key === key)?.label ?? key ?? 'Subscribed');
 
 const swatch = (active: boolean) =>
     cn(
@@ -129,6 +138,20 @@ function toggleVisibility(calendar: ManagedCalendar): void {
 
 function disconnect(id: number): void {
     router.delete(disconnectAccount(id).url, { preserveScroll: true });
+}
+
+function resync(id: number): void {
+    router.post(resyncAccount(id).url, {}, { preserveScroll: true });
+}
+
+// Subscribe to an ICS/webcal feed
+const subscribeOpen = ref(false);
+const subscribeUrl = ref('');
+const subscribeName = ref('');
+function openSubscribe(): void {
+    subscribeUrl.value = '';
+    subscribeName.value = '';
+    subscribeOpen.value = true;
 }
 </script>
 
@@ -248,7 +271,7 @@ function disconnect(id: number): void {
             <Heading
                 variant="small"
                 title="Connected accounts"
-                description="Show your Google and Microsoft calendars in Chronos."
+                description="Show your Google and Microsoft calendars in Chronos, or subscribe to any public ICS/webcal feed."
             />
 
             <div v-if="accounts.length" class="space-y-2">
@@ -262,12 +285,15 @@ function disconnect(id: number): void {
                 >
                     <div class="flex items-center justify-between gap-3">
                         <div class="flex min-w-0 items-center gap-3">
-                            <CalendarDays
+                            <component
+                                :is="
+                                    account.is_subscription ? Rss : CalendarDays
+                                "
                                 class="size-5 shrink-0 text-muted-foreground"
                             />
                             <div class="min-w-0">
                                 <p class="truncate text-sm font-medium">
-                                    {{ account.email }}
+                                    {{ account.email ?? account.display_name }}
                                 </p>
                                 <p
                                     class="truncate text-xs text-muted-foreground"
@@ -311,23 +337,48 @@ function disconnect(id: number): void {
                                 </a>
                             </Button>
                             <Button
+                                v-if="
+                                    account.is_subscription &&
+                                    account.sync_error
+                                "
+                                variant="outline"
+                                size="sm"
+                                @click="resync(account.id)"
+                            >
+                                <RefreshCw class="size-4" />
+                                Retry
+                            </Button>
+                            <Button
                                 variant="outline"
                                 size="sm"
                                 @click="disconnect(account.id)"
                             >
-                                Disconnect
+                                {{
+                                    account.is_subscription
+                                        ? 'Remove'
+                                        : 'Disconnect'
+                                }}
                             </Button>
                         </div>
                     </div>
 
                     <div
-                        v-if="account.needs_reconnect"
+                        v-if="
+                            account.needs_reconnect ||
+                            (account.is_subscription && account.sync_error)
+                        "
                         class="mt-2 flex items-start gap-2 rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
                     >
                         <TriangleAlert class="mt-0.5 size-4 shrink-0" />
                         <span>
-                            Syncing stopped, so this calendar is no longer
-                            updating. Reconnect to fix it.
+                            <template v-if="account.is_subscription">
+                                This feed couldn't be read, so it's no longer
+                                updating. Retry, or remove it.
+                            </template>
+                            <template v-else>
+                                Syncing stopped, so this calendar is no longer
+                                updating. Reconnect to fix it.
+                            </template>
                             <span v-if="account.sync_error" class="opacity-80">
                                 ({{ account.sync_error }})
                             </span>
@@ -351,6 +402,10 @@ function disconnect(id: number): void {
                         <Plug class="size-4" />
                         {{ provider.label }}
                     </a>
+                </Button>
+                <Button variant="outline" @click="openSubscribe">
+                    <Rss class="size-4" />
+                    Add calendar by URL
                 </Button>
             </div>
         </section>
@@ -501,6 +556,62 @@ function disconnect(id: number): void {
                         :disabled="processing"
                     >
                         Delete calendar
+                    </Button>
+                </DialogFooter>
+            </Form>
+        </DialogContent>
+    </Dialog>
+
+    <!-- Subscribe dialog -->
+    <Dialog v-model:open="subscribeOpen">
+        <DialogContent>
+            <Form
+                v-bind="ConnectedAccountController.storeSubscription.form()"
+                :options="{ preserveScroll: true }"
+                @success="subscribeOpen = false"
+                class="space-y-5"
+                v-slot="{ processing, errors }"
+            >
+                <DialogHeader>
+                    <DialogTitle>Subscribe to a calendar</DialogTitle>
+                    <DialogDescription>
+                        Paste a public ICS or webcal feed URL. Chronos mirrors
+                        it read-only and keeps it up to date automatically.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div class="grid gap-2">
+                    <Label for="subscribe-url">Feed URL</Label>
+                    <Input
+                        id="subscribe-url"
+                        name="url"
+                        v-model="subscribeUrl"
+                        placeholder="https://example.com/calendar.ics"
+                        autocomplete="off"
+                    />
+                    <InputError :message="errors.url" />
+                </div>
+
+                <div class="grid gap-2">
+                    <Label for="subscribe-name">Name (optional)</Label>
+                    <Input
+                        id="subscribe-name"
+                        name="name"
+                        v-model="subscribeName"
+                        placeholder="Defaults to the feed's own name"
+                        autocomplete="off"
+                    />
+                    <InputError :message="errors.name" />
+                </div>
+
+                <DialogFooter class="gap-2">
+                    <DialogClose as-child>
+                        <Button variant="secondary" type="button">
+                            Cancel
+                        </Button>
+                    </DialogClose>
+                    <Button type="submit" :disabled="processing">
+                        Subscribe
                     </Button>
                 </DialogFooter>
             </Form>

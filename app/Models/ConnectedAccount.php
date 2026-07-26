@@ -15,7 +15,9 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $user_id
  * @property string $provider
- * @property string $email_address
+ * @property string|null $email_address
+ * @property string|null $feed_url
+ * @property string|null $feed_url_hash
  * @property string|null $display_name
  * @property string|null $oauth_access_token
  * @property string|null $oauth_refresh_token
@@ -32,6 +34,8 @@ use Illuminate\Support\Carbon;
     'user_id',
     'provider',
     'email_address',
+    'feed_url',
+    'feed_url_hash',
     'display_name',
     'oauth_access_token',
     'oauth_refresh_token',
@@ -48,6 +52,8 @@ class ConnectedAccount extends Model
     public const PROVIDER_GOOGLE = 'google';
 
     public const PROVIDER_MICROSOFT = 'microsoft';
+
+    public const PROVIDER_ICS = 'ics';
 
     /** @use HasFactory<ConnectedAccountFactory> */
     use HasFactory;
@@ -82,6 +88,7 @@ class ConnectedAccount extends Model
         return [
             'oauth_access_token' => 'encrypted',
             'oauth_refresh_token' => 'encrypted',
+            'feed_url' => 'encrypted',
             'oauth_expires_at' => 'datetime',
             'sync_status_since' => 'datetime',
             'last_synced_at' => 'datetime',

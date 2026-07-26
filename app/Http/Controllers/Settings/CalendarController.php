@@ -48,12 +48,14 @@ class CalendarController extends Controller
             ->map(fn (ConnectedAccount $account) => [
                 'id' => $account->id,
                 'provider' => $account->provider,
+                'is_subscription' => $account->provider === ConnectedAccount::PROVIDER_ICS,
                 'email' => $account->email_address,
                 'display_name' => $account->display_name,
                 'sync_status' => $account->sync_status,
-                // A failed sync (e.g. an expired/revoked refresh token) needs the
-                // user to re-consent; surface the error and a reconnect prompt.
-                'needs_reconnect' => $account->sync_status === 'error',
+                // OAuth accounts recover from a failed sync by re-consenting;
+                // ICS feeds instead offer a plain retry.
+                'needs_reconnect' => $account->provider !== ConnectedAccount::PROVIDER_ICS
+                    && $account->sync_status === 'error',
                 'sync_error' => $account->sync_status === 'error' ? $account->sync_error : null,
                 // Silently behind: idle but not refreshed in a while (sync runs
                 // every 15 minutes), so something quietly stopped keeping it fresh.
