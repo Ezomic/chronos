@@ -25,6 +25,8 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('settings/templates/{eventTemplate}', [EventTemplateController::class, 'update'])->name('event-templates.update');
     Route::delete('settings/templates/{eventTemplate}', [EventTemplateController::class, 'destroy'])->name('event-templates.destroy');
 
+    Route::post('settings/subscriptions', [ConnectedAccountController::class, 'storeSubscription'])->name('subscriptions.store');
+    Route::post('settings/connected-accounts/{account}/resync', [ConnectedAccountController::class, 'resync'])->name('connected-accounts.resync');
     Route::delete('settings/connected-accounts/{account}', [ConnectedAccountController::class, 'destroy'])->name('connected-accounts.destroy');
 
     Route::get('auth/{provider}/redirect', [CalendarOAuthController::class, 'redirect'])->name('oauth.redirect');
