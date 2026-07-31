@@ -6,3 +6,8 @@ export type PortalApp = {
     launch_url: string;
     current: boolean;
 };
+
+export type PortalCategory = {
+    category: string;
+    apps: PortalApp[];
+};
