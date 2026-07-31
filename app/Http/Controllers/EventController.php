@@ -33,7 +33,7 @@ class EventController extends Controller
 
         [$startsAt, $endsAt, $timezone] = $this->resolveEventTimes(
             $request->boolean('all_day'),
-            $request->input('timezone'),
+            $request->string('timezone')->toString() ?: null,
             $request->string('starts_at')->toString(),
             $request->string('ends_at')->toString(),
         );
@@ -45,8 +45,8 @@ class EventController extends Controller
             endsAt: $endsAt,
             allDay: $request->boolean('all_day'),
             timezone: $timezone,
-            description: $request->input('description'),
-            location: $request->input('location'),
+            description: $request->string('description')->toString() ?: null,
+            location: $request->string('location')->toString() ?: null,
             rrule: $this->buildRrule($request, $timezone),
             reminderMinutes: $this->reminderMinutes($request),
         );
@@ -62,7 +62,7 @@ class EventController extends Controller
 
         [$startsAt, $endsAt, $timezone] = $this->resolveEventTimes(
             $request->boolean('all_day'),
-            $request->input('timezone'),
+            $request->string('timezone')->toString() ?: null,
             $request->string('starts_at')->toString(),
             $request->string('ends_at')->toString(),
         );

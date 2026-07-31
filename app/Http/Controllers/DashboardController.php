@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\Calendar\RecurrenceExpander;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -51,7 +52,7 @@ class DashboardController extends Controller
      */
     private function occurrences(User $user, CarbonImmutable $from, CarbonImmutable $to): array
     {
-        $ownedVisible = fn ($query) => $query
+        $ownedVisible = fn (Builder $query) => $query
             ->where('user_id', $user->id)
             ->where('is_visible', true);
 

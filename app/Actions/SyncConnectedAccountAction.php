@@ -40,7 +40,8 @@ class SyncConnectedAccountAction
 
             foreach ($source->calendars($token) as $remote) {
                 $calendar = $this->upsertCalendar($account, $remote);
-                $events = $source->events($token, $remote['external_id'], $from, $to);
+                $externalId = is_string($remote['external_id'] ?? null) ? $remote['external_id'] : '';
+                $events = $source->events($token, $externalId, $from, $to);
                 $events = $this->applyDisplayTimezone($account, $events);
                 $this->syncEvents($calendar, $events, $from, $to);
             }

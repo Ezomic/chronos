@@ -59,7 +59,8 @@ class MicrosoftCalendarService implements CalendarSource
         // Ask Graph to return times in a real IANA zone (it accepts IANA names
         // and echoes them back in start.timeZone) so mirrored events keep a
         // local zone instead of the UTC default.
-        $timezone = (string) config('services.microsoft.timezone', 'UTC');
+        $configuredTimezone = config('services.microsoft.timezone', 'UTC');
+        $timezone = is_string($configuredTimezone) ? $configuredTimezone : 'UTC';
 
         $response = Http::withToken($accessToken)
             ->withHeaders(['Prefer' => "outlook.timezone=\"{$timezone}\""])
@@ -86,7 +87,13 @@ class MicrosoftCalendarService implements CalendarSource
                 continue;
             }
 
-            $events[] = $this->normalize($item);
+            $keyed = [];
+
+            foreach ($item as $key => $value) {
+                $keyed[(string) $key] = $value;
+            }
+
+            $events[] = $this->normalize($keyed);
         }
 
         return $events;
@@ -103,16 +110,19 @@ class MicrosoftCalendarService implements CalendarSource
         $location = is_array($event['location'] ?? null) ? $event['location'] : [];
         $allDay = ($event['isAllDay'] ?? false) === true;
 
+        $startTime = is_string($start['dateTime'] ?? null) ? $start['dateTime'] : 'now';
+        $endTime = is_string($end['dateTime'] ?? null) ? $end['dateTime'] : 'now';
+
         if ($allDay) {
-            $startDate = CarbonImmutable::parse($start['dateTime'])->format('Y-m-d');
-            $endDate = CarbonImmutable::parse($end['dateTime'])->format('Y-m-d');
+            $startDate = CarbonImmutable::parse($startTime)->format('Y-m-d');
+            $endDate = CarbonImmutable::parse($endTime)->format('Y-m-d');
             $startsAt = CarbonImmutable::createFromFormat('Y-m-d H:i', "{$startDate} 00:00", 'UTC');
             $endsAt = CarbonImmutable::createFromFormat('Y-m-d H:i', "{$endDate} 00:00", 'UTC');
             $timezone = 'UTC';
         } else {
-            $timezone = $start['timeZone'] ?? 'UTC';
-            $startsAt = CarbonImmutable::parse($start['dateTime'], $timezone)->utc();
-            $endsAt = CarbonImmutable::parse($end['dateTime'], $timezone)->utc();
+            $timezone = is_string($start['timeZone'] ?? null) ? $start['timeZone'] : 'UTC';
+            $startsAt = CarbonImmutable::parse($startTime, $timezone)->utc();
+            $endsAt = CarbonImmutable::parse($endTime, $timezone)->utc();
         }
 
         return [

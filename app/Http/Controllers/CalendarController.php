@@ -10,6 +10,7 @@ use App\Models\Event;
 use App\Services\Calendar\RecurrenceExpander;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -55,11 +56,11 @@ class CalendarController extends Controller
         $from = $gridStart->subDay();
         $to = $gridEnd->addDay();
 
-        $ownedVisible = fn ($query) => $query
+        $ownedVisible = fn (Builder $query) => $query
             ->where('user_id', $this->currentUser()->id)
             ->where('is_visible', true);
 
-        $searchScope = fn ($query) => $query->where(fn ($inner) => $inner
+        $searchScope = fn (Builder $query) => $query->where(fn (Builder $inner) => $inner
             ->where('title', 'like', "%{$search}%")
             ->orWhere('location', 'like', "%{$search}%")
             ->orWhere('description', 'like', "%{$search}%"));
@@ -87,9 +88,11 @@ class CalendarController extends Controller
         $events = collect();
 
         foreach ($single as $event) {
+            /** @var Event $event */
             $events->push($this->serializeOccurrence($event, $event->starts_at, $event->ends_at));
         }
 
+        /** @var Event $master */
         foreach ($recurring as $master) {
             foreach ($this->expander->expand($master, $from, $to) as $occurrence) {
                 $events->push($this->serializeOccurrence($master, $occurrence['starts_at'], $occurrence['ends_at']));

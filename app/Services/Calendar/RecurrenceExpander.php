@@ -43,9 +43,15 @@ class RecurrenceExpander
             new BetweenConstraint($from->toDateTime(), $to->toDateTime(), true),
         );
 
-        return array_map(fn ($occurrence): array => [
-            'starts_at' => CarbonImmutable::instance($occurrence->getStart()),
-            'ends_at' => CarbonImmutable::instance($occurrence->getEnd()),
-        ], $recurrences->toArray());
+        $occurrences = [];
+
+        foreach ($recurrences as $occurrence) {
+            $occurrences[] = [
+                'starts_at' => CarbonImmutable::instance($occurrence->getStart()),
+                'ends_at' => CarbonImmutable::instance($occurrence->getEnd()),
+            ];
+        }
+
+        return $occurrences;
     }
 }

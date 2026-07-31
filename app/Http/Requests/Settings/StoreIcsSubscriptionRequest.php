@@ -16,7 +16,7 @@ class StoreIcsSubscriptionRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $url = trim((string) $this->input('url'));
+        $url = trim($this->string('url')->toString());
 
         // Calendar apps hand out webcal:// links; they're plain HTTP(S) feeds.
         if (Str::startsWith($url, 'webcal://')) {
