@@ -88,7 +88,10 @@ class CalendarController extends Controller
     {
         Gate::authorize('update', $calendar);
 
-        $calendar->update($request->only('name', 'color'));
+        $calendar->update([
+            'name' => $request->string('name')->toString(),
+            'color' => $request->string('color')->toString(),
+        ]);
 
         return back()->with('status', 'Calendar updated.');
     }

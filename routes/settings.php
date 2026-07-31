@@ -7,6 +7,7 @@ use App\Http\Controllers\Settings\EventTemplateController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
 
 Route::middleware(['auth'])->group(function () {
     Route::redirect('settings', '/settings/profile');
@@ -38,7 +39,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('settings/security', [SecurityController::class, 'edit'])->name('security.edit');
 
-    Route::inertia('settings/appearance', 'settings/Appearance')->name('appearance.edit');
+    Route::get('settings/appearance', fn () => Inertia::render('settings/Appearance'))->name('appearance.edit');
 });
 
 Route::get('.well-known/passkey-endpoints', function () {

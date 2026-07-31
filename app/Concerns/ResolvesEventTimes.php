@@ -28,7 +28,8 @@ trait ResolvesEventTimes
             ];
         }
 
-        $timezone = $timezone ?: config('app.timezone');
+        $configuredTimezone = config('app.timezone');
+        $timezone = $timezone ?: (is_string($configuredTimezone) ? $configuredTimezone : 'UTC');
 
         return [
             CarbonImmutable::parse($start, $timezone)->utc(),

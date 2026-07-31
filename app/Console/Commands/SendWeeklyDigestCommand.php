@@ -11,6 +11,7 @@ use App\Services\Calendar\RecurrenceExpander;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Builder;
 
 class SendWeeklyDigestCommand extends Command
 {
@@ -56,7 +57,7 @@ class SendWeeklyDigestCommand extends Command
      */
     private function weekItems(User $user, CarbonImmutable $weekStart, CarbonImmutable $weekEnd): array
     {
-        $ownedVisible = fn ($query) => $query
+        $ownedVisible = fn (Builder $query) => $query
             ->where('user_id', $user->id)
             ->where('is_visible', true);
 

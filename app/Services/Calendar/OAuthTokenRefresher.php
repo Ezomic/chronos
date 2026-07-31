@@ -43,13 +43,19 @@ class OAuthTokenRefresher
         }
 
         $data = $response->json();
+        $accessToken = is_array($data) && is_string($data['access_token'] ?? null) ? $data['access_token'] : null;
+        $expiresIn = is_array($data) && is_numeric($data['expires_in'] ?? null) ? (int) $data['expires_in'] : 3600;
+
+        if ($accessToken === null) {
+            throw new RuntimeException('Google token refresh returned no access token for account '.$account->id);
+        }
 
         $account->update([
-            'oauth_access_token' => $data['access_token'],
-            'oauth_expires_at' => now()->addSeconds($data['expires_in'] ?? 3600),
+            'oauth_access_token' => $accessToken,
+            'oauth_expires_at' => now()->addSeconds($expiresIn),
         ]);
 
-        return $data['access_token'];
+        return $accessToken;
     }
 
     protected function refreshMicrosoft(ConnectedAccount $account): string
@@ -68,14 +74,21 @@ class OAuthTokenRefresher
         }
 
         $data = $response->json();
+        $accessToken = is_array($data) && is_string($data['access_token'] ?? null) ? $data['access_token'] : null;
+        $refreshToken = is_array($data) && is_string($data['refresh_token'] ?? null) ? $data['refresh_token'] : $account->oauth_refresh_token;
+        $expiresIn = is_array($data) && is_numeric($data['expires_in'] ?? null) ? (int) $data['expires_in'] : 3600;
+
+        if ($accessToken === null) {
+            throw new RuntimeException('Microsoft token refresh returned no access token for account '.$account->id);
+        }
 
         $account->update([
-            'oauth_access_token' => $data['access_token'],
+            'oauth_access_token' => $accessToken,
             // Microsoft rotates refresh tokens on most requests.
-            'oauth_refresh_token' => $data['refresh_token'] ?? $account->oauth_refresh_token,
-            'oauth_expires_at' => now()->addSeconds($data['expires_in'] ?? 3600),
+            'oauth_refresh_token' => $refreshToken,
+            'oauth_expires_at' => now()->addSeconds($expiresIn),
         ]);
 
-        return $data['access_token'];
+        return $accessToken;
     }
 }

@@ -78,7 +78,13 @@ class GoogleCalendarService implements CalendarSource
                 continue;
             }
 
-            $events[] = $this->normalize($item);
+            $keyed = [];
+
+            foreach ($item as $key => $value) {
+                $keyed[(string) $key] = $value;
+            }
+
+            $events[] = $this->normalize($keyed);
         }
 
         return $events;
@@ -95,13 +101,15 @@ class GoogleCalendarService implements CalendarSource
         $allDay = isset($start['date']);
 
         if ($allDay) {
-            $startsAt = CarbonImmutable::createFromFormat('Y-m-d H:i', $start['date'].' 00:00', 'UTC');
-            $endsAt = CarbonImmutable::createFromFormat('Y-m-d H:i', $end['date'].' 00:00', 'UTC');
+            $startDate = is_string($start['date'] ?? null) ? $start['date'] : '1970-01-01';
+            $endDate = is_string($end['date'] ?? null) ? $end['date'] : '1970-01-01';
+            $startsAt = CarbonImmutable::createFromFormat('Y-m-d H:i', $startDate.' 00:00', 'UTC');
+            $endsAt = CarbonImmutable::createFromFormat('Y-m-d H:i', $endDate.' 00:00', 'UTC');
             $timezone = 'UTC';
         } else {
-            $timezone = $start['timeZone'] ?? 'UTC';
-            $startsAt = CarbonImmutable::parse($start['dateTime'])->utc();
-            $endsAt = CarbonImmutable::parse($end['dateTime'])->utc();
+            $timezone = is_string($start['timeZone'] ?? null) ? $start['timeZone'] : 'UTC';
+            $startsAt = CarbonImmutable::parse(is_string($start['dateTime'] ?? null) ? $start['dateTime'] : 'now')->utc();
+            $endsAt = CarbonImmutable::parse(is_string($end['dateTime'] ?? null) ? $end['dateTime'] : 'now')->utc();
         }
 
         return [

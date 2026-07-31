@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Concerns;
 
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Exists;
 
@@ -17,7 +18,7 @@ trait ValidatesWritableCalendar
      */
     protected function writableCalendarRule(): Exists
     {
-        return Rule::exists('calendars', 'id')->where(fn ($query) => $query
+        return Rule::exists('calendars', 'id')->where(fn (QueryBuilder $query) => $query
             ->where('user_id', $this->currentUser()->id)
             ->where('is_writable', true));
     }

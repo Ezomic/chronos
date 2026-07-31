@@ -13,4 +13,4 @@ parameters:
     excludePaths:
         - config/sanctum.php
 
-    level: 8
+    level: 10
