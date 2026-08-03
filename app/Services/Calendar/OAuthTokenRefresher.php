@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\Calendar;
 
+use App\Exceptions\ReauthorizationRequiredException;
 use App\Models\ConnectedAccount;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -38,8 +40,7 @@ class OAuthTokenRefresher
         ]);
 
         if ($response->failed()) {
-            $account->update(['sync_status' => 'error', 'sync_error' => 'Google token refresh failed: '.$response->body()]);
-            throw new RuntimeException('Google token refresh failed for account '.$account->id);
+            $this->throwRefreshFailure($response, 'Google');
         }
 
         $data = $response->json();
@@ -69,8 +70,7 @@ class OAuthTokenRefresher
         ]);
 
         if ($response->failed()) {
-            $account->update(['sync_status' => 'error', 'sync_error' => 'Microsoft token refresh failed: '.$response->body()]);
-            throw new RuntimeException('Microsoft token refresh failed for account '.$account->id);
+            $this->throwRefreshFailure($response, 'Microsoft');
         }
 
         $data = $response->json();
@@ -90,5 +90,29 @@ class OAuthTokenRefresher
         ]);
 
         return $accessToken;
+    }
+
+    /**
+     * Both providers answer a dead refresh token with OAuth's `invalid_grant`.
+     * That is terminal — the user has to re-consent — so it gets its own
+     * exception, while anything else (5xx, rate limits, network blips) stays a
+     * plain failure the queue is free to retry.
+     *
+     * @return never
+     */
+    private function throwRefreshFailure(Response $response, string $provider): void
+    {
+        $data = $response->json();
+        $error = is_array($data) && is_string($data['error'] ?? null) ? $data['error'] : null;
+
+        if ($error === 'invalid_grant') {
+            throw new ReauthorizationRequiredException(
+                "{$provider} access was revoked or expired. Reconnect the account to resume syncing."
+            );
+        }
+
+        throw new RuntimeException(
+            "{$provider} token refresh failed (HTTP {$response->status()}): ".$response->body()
+        );
     }
 }

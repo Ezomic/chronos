@@ -2,6 +2,7 @@
 
 use App\Models\ConnectedAccount;
 use App\Models\User;
+use Inertia\Testing\AssertableInertia;
 use Laravel\Socialite\Contracts\Provider;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\User as SocialiteUser;
@@ -88,4 +89,22 @@ it('renders the connected-calendars settings page', function () {
     $this->actingAs($user)
         ->get(route('calendars.edit'))
         ->assertOk();
+});
+
+it('still offers a reconnect prompt after an account is deactivated', function () {
+    $user = User::factory()->create();
+    ConnectedAccount::factory()->for($user)->create([
+        'provider' => ConnectedAccount::PROVIDER_GOOGLE,
+        'is_active' => false,
+        'sync_status' => 'error',
+        'sync_error' => 'Google access was revoked or expired. Reconnect the account to resume syncing.',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('calendars.edit'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('accounts', 1)
+            ->where('accounts.0.needs_reconnect', true)
+            ->where('accounts.0.sync_error', 'Google access was revoked or expired. Reconnect the account to resume syncing.'));
 });
