@@ -12,30 +12,10 @@ use App\Jobs\SyncConnectedAccountJob;
 use App\Models\ConnectedAccount;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Inertia\Response;
 
 class ConnectedAccountController extends Controller
 {
     use InteractsWithCurrentUser;
-
-    public function edit(Request $request): Response
-    {
-        return Inertia::render('settings/Calendars', [
-            'accounts' => $this->currentUser()->connectedAccounts()
-                ->latest()
-                ->get()
-                ->map(fn (ConnectedAccount $account) => [
-                    'id' => $account->id,
-                    'provider' => $account->provider,
-                    'email' => $account->email_address,
-                    'display_name' => $account->display_name,
-                    'sync_status' => $account->sync_status,
-                    'last_synced_at_diff' => $account->last_synced_at?->diffForHumans(),
-                ])
-                ->values(),
-        ]);
-    }
 
     public function storeSubscription(StoreIcsSubscriptionRequest $request, SubscribeToIcsFeedAction $action): RedirectResponse
     {
