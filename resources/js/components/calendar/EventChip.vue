@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePage } from '@inertiajs/vue3';
 import { Bell, Mail, Repeat } from '@lucide/vue';
 import { computed } from 'vue';
 import { formatEventTime } from '@/composables/useCalendarGrid';
@@ -7,9 +8,13 @@ import type { CalendarEvent } from '@/types/calendar';
 
 const props = defineProps<{ event: CalendarEvent }>();
 
+const page = usePage();
+
 const time = computed(() => formatEventTime(props.event));
 const fromMail = computed(() => props.event.source_app === 'zero');
-const source = computed(() => sourceLink(props.event));
+const source = computed(() =>
+    sourceLink(props.event, page.props.eventSourceLabels),
+);
 
 const style = computed(() => {
     const color = props.event.color;

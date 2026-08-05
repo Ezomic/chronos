@@ -43,6 +43,9 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user(),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            // Labels for the "open the thing this event came from" link, so
+            // onboarding a consumer app stays a config change.
+            'eventSourceLabels' => config('chronos.consumers'),
             'portalApps' => fn () => $request->user() === null
                 ? []
                 : app(IdPortalClient::class)->appsFor($request->user())['apps'],

@@ -112,7 +112,9 @@ const templateName = ref('');
 const templateError = ref('');
 const savingTemplate = ref(false);
 
-const source = computed(() => (props.event ? sourceLink(props.event) : null));
+const source = computed(() =>
+    props.event ? sourceLink(props.event, page.props.eventSourceLabels) : null,
+);
 
 // Events on read-only mirrored calendars (Google/Microsoft) can't be edited,
 // and their calendar isn't in the writable list the form's picker is built

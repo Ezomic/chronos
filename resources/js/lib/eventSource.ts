@@ -1,32 +1,29 @@
 import type { CalendarEvent } from '@/types/calendar';
 
-// Only apps we recognise get their source_url rendered as a link, so an
-// arbitrary stored URL can never be turned into a clickable anchor.
-const KNOWN_SOURCES: Record<string, string> = {
-    zero: 'Open in Mail',
-    tracker: 'Open in Tracker',
-    tempo: 'Open in Tempo',
-};
-
 export interface SourceLink {
     href: string;
     label: string;
 }
 
-export function sourceLink(event: CalendarEvent): SourceLink | null {
+/**
+ * Only apps Chronos knows about get their source_url rendered as a link, so an
+ * arbitrary stored URL can never be turned into a clickable anchor. The labels
+ * come from config (chronos.consumers) via shared Inertia props, so onboarding
+ * a consumer does not need a frontend change.
+ */
+export function sourceLink(
+    event: CalendarEvent,
+    labels: Record<string, string>,
+): SourceLink | null {
     if (!event.source_app || !event.source_url) {
         return null;
     }
 
-    const label = KNOWN_SOURCES[event.source_app];
+    const label = labels[event.source_app];
 
     if (!label) {
         return null;
     }
 
     return { href: event.source_url, label };
-}
-
-export function hasKnownSource(event: CalendarEvent): boolean {
-    return sourceLink(event) !== null;
 }
