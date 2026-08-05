@@ -3,6 +3,7 @@
 use App\Models\Calendar;
 use App\Models\Event;
 use App\Models\User;
+use App\Services\Calendar\RecurrenceExpander;
 use Carbon\CarbonImmutable;
 use Inertia\Testing\AssertableInertia;
 
@@ -110,6 +111,83 @@ it('clears recurrence when a series is edited to not repeat', function () {
         ->assertRedirect();
 
     expect($event->fresh()->rrule)->toBeNull();
+});
+
+it('keeps the local start time of a series across the autumn DST change', function () {
+    $calendar = Calendar::factory()->create();
+
+    $event = Event::factory()->for($calendar)->create([
+        'starts_at' => CarbonImmutable::parse('2026-10-05 09:00', 'Europe/Amsterdam')->utc(),
+        'ends_at' => CarbonImmutable::parse('2026-10-05 09:30', 'Europe/Amsterdam')->utc(),
+        'timezone' => 'Europe/Amsterdam',
+        'rrule' => 'FREQ=WEEKLY',
+    ]);
+
+    $occurrences = app(RecurrenceExpander::class)->expand(
+        $event,
+        CarbonImmutable::parse('2026-10-01T00:00:00Z'),
+        CarbonImmutable::parse('2026-11-09T00:00:00Z'),
+    );
+
+    $local = array_map(
+        fn (array $occurrence) => $occurrence['starts_at']->setTimezone('Europe/Amsterdam')->format('Y-m-d H:i'),
+        $occurrences,
+    );
+
+    // Amsterdam leaves summer time on 25 October 2026, between the third and
+    // fourth occurrence. The wall-clock time has to stay put.
+    expect($local)->toBe([
+        '2026-10-05 09:00',
+        '2026-10-12 09:00',
+        '2026-10-19 09:00',
+        '2026-10-26 09:00',
+        '2026-11-02 09:00',
+    ]);
+
+    // Which means the underlying UTC instant moves by the offset change.
+    expect($occurrences[0]['starts_at']->format('H:i'))->toBe('07:00')
+        ->and($occurrences[3]['starts_at']->format('H:i'))->toBe('08:00');
+});
+
+it('preserves each occurrence duration across the DST change', function () {
+    $calendar = Calendar::factory()->create();
+
+    $event = Event::factory()->for($calendar)->create([
+        'starts_at' => CarbonImmutable::parse('2026-10-19 09:00', 'Europe/Amsterdam')->utc(),
+        'ends_at' => CarbonImmutable::parse('2026-10-19 10:30', 'Europe/Amsterdam')->utc(),
+        'timezone' => 'Europe/Amsterdam',
+        'rrule' => 'FREQ=WEEKLY',
+    ]);
+
+    $occurrences = app(RecurrenceExpander::class)->expand(
+        $event,
+        CarbonImmutable::parse('2026-10-01T00:00:00Z'),
+        CarbonImmutable::parse('2026-11-09T00:00:00Z'),
+    );
+
+    foreach ($occurrences as $occurrence) {
+        expect($occurrence['starts_at']->diffInMinutes($occurrence['ends_at']))->toBe(90.0);
+    }
+});
+
+it('leaves an all-day series on its dates', function () {
+    $calendar = Calendar::factory()->create();
+
+    $event = Event::factory()->for($calendar)->allDay()->create([
+        'starts_at' => CarbonImmutable::parse('2026-10-19 00:00', 'UTC'),
+        'ends_at' => CarbonImmutable::parse('2026-10-20 00:00', 'UTC'),
+        'timezone' => 'UTC',
+        'rrule' => 'FREQ=WEEKLY',
+    ]);
+
+    $occurrences = app(RecurrenceExpander::class)->expand(
+        $event,
+        CarbonImmutable::parse('2026-10-01T00:00:00Z'),
+        CarbonImmutable::parse('2026-11-09T00:00:00Z'),
+    );
+
+    expect(array_map(fn (array $o) => $o['starts_at']->format('Y-m-d H:i'), $occurrences))
+        ->toBe(['2026-10-19 00:00', '2026-10-26 00:00', '2026-11-02 00:00', '2026-11-09 00:00']);
 });
 
 it('deletes the whole series when the master is deleted', function () {
