@@ -9,7 +9,11 @@ use Illuminate\Console\Command;
 
 class IssueApiToken extends Command
 {
-    protected $signature = 'calendar:token {email} {--name=api} {--ability=events:create}';
+    protected $signature = 'calendar:token
+        {email}
+        {--name=api}
+        {--ability=* : Repeatable; defaults to events:create}
+        {--app= : The consuming app this token speaks for, required to manage events}';
 
     protected $description = 'Mint a scoped API token for another app to create events';
 
@@ -23,13 +27,34 @@ class IssueApiToken extends Command
             return self::FAILURE;
         }
 
+        $abilities = $this->abilities();
         $name = $this->option('name');
 
-        $token = $user->createToken(is_string($name) ? $name : 'api', [$this->option('ability')]);
+        $token = $user->createToken(is_string($name) ? $name : 'api', $abilities);
 
-        $this->info("Token for {$user->email} (ability: {$this->option('ability')}) — shown once:");
+        $this->info("Token for {$user->email} (".implode(', ', $abilities).') — shown once:');
         $this->line($token->plainTextToken);
 
         return self::SUCCESS;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function abilities(): array
+    {
+        $abilities = array_values(array_filter($this->option('ability'), 'is_string'));
+
+        if ($abilities === []) {
+            $abilities = ['events:create'];
+        }
+
+        $app = $this->option('app');
+
+        if (is_string($app) && $app !== '') {
+            $abilities[] = 'app:'.$app;
+        }
+
+        return $abilities;
     }
 }
