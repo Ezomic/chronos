@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\Calendar\HostResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -16,6 +17,22 @@ use Tests\TestCase;
 
 pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
+    ->beforeEach(function () {
+        // Feed hosts resolve to a public address by default. Without this, DNS
+        // decides the outcome: a Herd laptop answers 127.0.0.1 for .test and CI
+        // answers nothing, so the feed guard would behave differently in each.
+        // The tests that care about the guard bind their own resolver.
+        $this->app->instance(HostResolver::class, new class extends HostResolver
+        {
+            public function resolve(string $host): array
+            {
+                // An IP literal is itself, exactly as the real resolver treats it.
+                return filter_var($host, FILTER_VALIDATE_IP) !== false
+                    ? [$host]
+                    : ['93.184.216.34'];
+            }
+        });
+    })
     ->in('Feature');
 
 /*

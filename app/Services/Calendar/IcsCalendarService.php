@@ -6,6 +6,7 @@ namespace App\Services\Calendar;
 
 use Carbon\CarbonImmutable;
 use DateInterval;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 use Sabre\VObject\Component;
@@ -26,8 +27,15 @@ class IcsCalendarService implements CalendarSource
     /** One feed maps to one calendar; the id is stable across syncs. */
     private const CALENDAR_ID = 'feed';
 
+    /** Enough for a very large public feed, far short of exhausting memory. */
+    private const MAX_BYTES = 5_242_880;
+
+    private const MAX_REDIRECTS = 3;
+
     /** @var array<string, string> */
     private array $bodies = [];
+
+    public function __construct(private readonly FeedUrlGuard $guard) {}
 
     /**
      * @return array<int, array<string, mixed>>
@@ -95,14 +103,87 @@ class IcsCalendarService implements CalendarSource
         return $document;
     }
 
+    /**
+     * Fetch a feed without letting it reach anything but the public internet.
+     * Redirects are followed by hand so each hop is checked the same way as the
+     * URL the user gave us, and the body is read against a cap so a hostile
+     * feed cannot stream until memory runs out.
+     */
     private function fetch(string $feedUrl): string
     {
-        $response = Http::timeout(15)
-            ->withHeaders(['User-Agent' => 'Chronos Calendar'])
-            ->get($feedUrl);
-        $response->throw();
+        $url = $feedUrl;
 
-        return $response->body();
+        for ($hop = 0; $hop <= self::MAX_REDIRECTS; $hop++) {
+            $this->guard->assertFetchable($url);
+
+            $response = Http::timeout(15)
+                ->withoutRedirecting()
+                ->withOptions(['stream' => true])
+                ->withHeaders(['User-Agent' => 'Chronos Calendar'])
+                ->get($url);
+
+            if (! $response->redirect()) {
+                $response->throw();
+
+                return $this->readCapped($response);
+            }
+
+            $url = $this->nextHop($url, $response->header('Location'));
+        }
+
+        throw new RuntimeException('Feed redirected more than '.self::MAX_REDIRECTS.' times.');
+    }
+
+    /**
+     * Absolute URLs and absolute paths only. A relative path would have to be
+     * resolved against the current one, and no calendar provider sends those.
+     */
+    private function nextHop(string $from, string $location): string
+    {
+        if ($location === '') {
+            throw new RuntimeException('Feed redirected without saying where to.');
+        }
+
+        if (is_string(parse_url($location, PHP_URL_SCHEME))) {
+            return $location;
+        }
+
+        if (! str_starts_with($location, '/')) {
+            throw new RuntimeException('Feed redirected to a relative location, which Chronos does not follow.');
+        }
+
+        $scheme = parse_url($from, PHP_URL_SCHEME);
+        $host = parse_url($from, PHP_URL_HOST);
+        $port = parse_url($from, PHP_URL_PORT);
+
+        if (! is_string($scheme) || ! is_string($host)) {
+            throw new RuntimeException('Feed redirected from a URL Chronos cannot read.');
+        }
+
+        return $scheme.'://'.$host.(is_int($port) ? ':'.$port : '').$location;
+    }
+
+    private function readCapped(Response $response): string
+    {
+        $stream = $response->toPsrResponse()->getBody();
+
+        // An in-memory body may have been read already; a network stream is not
+        // seekable and is always at the start.
+        if ($stream->isSeekable()) {
+            $stream->rewind();
+        }
+
+        $body = '';
+
+        while (! $stream->eof()) {
+            $body .= $stream->read(8192);
+
+            if (strlen($body) > self::MAX_BYTES) {
+                throw new RuntimeException('Feed is larger than the '.self::MAX_BYTES.' byte limit.');
+            }
+        }
+
+        return $body;
     }
 
     /**
