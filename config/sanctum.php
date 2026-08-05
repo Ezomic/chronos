@@ -48,6 +48,11 @@ return [
     | considered expired. This will override any values set in the token's
     | "expires_at" attribute, but first-party sessions are not affected.
     |
+    | Deliberately null (CHRON-54). These are machine-to-machine tokens for
+    | unattended consumers (zero, tempo) with no refresh flow, so an expiry
+    | would silently stop them creating events until someone noticed. Revoking
+    | a token is the control instead.
+    |
     */
 
     'expiration' => null,
