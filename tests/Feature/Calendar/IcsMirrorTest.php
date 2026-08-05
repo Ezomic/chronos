@@ -5,6 +5,7 @@ use App\Models\Calendar;
 use App\Models\ConnectedAccount;
 use App\Models\Event;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 
@@ -221,4 +222,34 @@ it('records the error and rethrows when the feed is unreachable', function () {
 
     expect(fn () => syncIcs($account))->toThrow(RequestException::class);
     expect($account->fresh()->sync_status)->toBe('error');
+});
+
+it('never writes the private feed URL into sync_error', function () {
+    // A connection failure is the dangerous case: Guzzle appends the full
+    // request URL to its message, and a private feed URL is a credential.
+    Http::fake(['feeds.test/*' => fn () => throw new ConnectionException(
+        'cURL error 6: Could not resolve host (see https://curl.se/x.html) for '.ICS_FEED_URL
+    )]);
+
+    $account = icsAccount();
+
+    expect(fn () => syncIcs($account))->toThrow(ConnectionException::class);
+
+    $stored = $account->fresh()->sync_error;
+
+    expect($stored)->not->toBeNull()
+        ->and($stored)->not->toContain(ICS_FEED_URL)
+        ->and($stored)->not->toContain('feeds.test')
+        ->and($stored)->not->toContain('cURL');
+});
+
+it('reports a provider rejection by status, not by response body', function () {
+    Http::fake(['feeds.test/*' => Http::response('<secret internal trace>', 403)]);
+
+    $account = icsAccount();
+
+    expect(fn () => syncIcs($account))->toThrow(RequestException::class);
+    expect($account->fresh()->sync_error)
+        ->not->toContain('secret internal trace')
+        ->toContain('Reconnect the account');
 });
