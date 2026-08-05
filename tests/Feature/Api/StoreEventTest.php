@@ -3,6 +3,7 @@
 use App\Models\Calendar;
 use App\Models\Event;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Laravel\Sanctum\Sanctum;
 
 function userWithDefaultCalendar(): User
@@ -58,6 +59,96 @@ it('accepts a tempo source app', function () {
     ])->assertCreated();
 
     expect(Event::query()->firstOrFail()->source_app)->toBe('tempo');
+});
+
+it('returns the existing event instead of creating a duplicate for the same source', function () {
+    Sanctum::actingAs(userWithDefaultCalendar(), ['events:create']);
+
+    $payload = [
+        'title' => 'Kickoff with Acme',
+        'starts_at' => '2026-07-20T09:00:00+02:00',
+        'ends_at' => '2026-07-20T09:30:00+02:00',
+        'source' => [
+            'app' => 'zero',
+            'type' => 'email',
+            'id' => '01JZ8XABCDEF0123456789ABCD',
+            'url' => 'https://zero.test/emails/ref/01JZ8XABCDEF0123456789ABCD',
+        ],
+    ];
+
+    $first = $this->postJson('/api/events', $payload)->assertCreated();
+    $second = $this->postJson('/api/events', $payload)->assertOk();
+
+    expect(Event::query()->count())->toBe(1)
+        ->and($second->json('id'))->toBe($first->json('id'));
+});
+
+it('still creates a second event for a different source id', function () {
+    Sanctum::actingAs(userWithDefaultCalendar(), ['events:create']);
+
+    $payload = fn (string $id): array => [
+        'title' => 'Kickoff',
+        'starts_at' => '2026-07-20T09:00:00+02:00',
+        'ends_at' => '2026-07-20T09:30:00+02:00',
+        'source' => ['app' => 'zero', 'type' => 'email', 'id' => $id, 'url' => 'https://zero.test/e/'.$id],
+    ];
+
+    $this->postJson('/api/events', $payload('one'))->assertCreated();
+    $this->postJson('/api/events', $payload('two'))->assertCreated();
+
+    expect(Event::query()->count())->toBe(2);
+});
+
+it('does not deduplicate events posted without a source', function () {
+    Sanctum::actingAs(userWithDefaultCalendar(), ['events:create']);
+
+    $payload = [
+        'title' => 'Focus block',
+        'starts_at' => '2026-07-20T09:00:00+02:00',
+        'ends_at' => '2026-07-20T09:30:00+02:00',
+    ];
+
+    $this->postJson('/api/events', $payload)->assertCreated();
+    $this->postJson('/api/events', $payload)->assertCreated();
+
+    expect(Event::query()->count())->toBe(2);
+});
+
+it('recognises a source event the user moved to another calendar', function () {
+    $user = userWithDefaultCalendar();
+    Sanctum::actingAs($user, ['events:create']);
+
+    $payload = [
+        'title' => 'Standup',
+        'starts_at' => '2026-07-20T09:00:00+02:00',
+        'ends_at' => '2026-07-20T09:15:00+02:00',
+        'source' => ['app' => 'tempo', 'type' => 'planned-workout', 'id' => '7', 'url' => 'https://tempo.test/plan'],
+    ];
+
+    $created = $this->postJson('/api/events', $payload)->assertCreated();
+
+    $other = Calendar::factory()->for($user)->create(['is_writable' => true, 'is_default' => false]);
+    Event::query()->findOrFail($created->json('id'))->forceFill(['calendar_id' => $other->id])->save();
+
+    $this->postJson('/api/events', $payload)->assertOk();
+
+    expect(Event::query()->count())->toBe(1);
+});
+
+it('backs the dedupe with a unique constraint so a race cannot slip through', function () {
+    $calendar = Calendar::factory()->create();
+
+    $source = [
+        'source_app' => 'zero',
+        'source_type' => 'email',
+        'source_id' => 'DUPLICATE',
+        'source_url' => 'https://zero.test/emails/ref/DUPLICATE',
+    ];
+
+    Event::factory()->for($calendar)->create($source);
+
+    expect(fn () => Event::factory()->for($calendar)->create($source))
+        ->toThrow(QueryException::class);
 });
 
 it('rejects an unauthenticated request', function () {
