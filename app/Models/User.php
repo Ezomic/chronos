@@ -21,18 +21,29 @@ use Laravel\Sanctum\HasApiTokens;
  * @property string $name
  * @property string $email
  * @property Carbon|null $email_verified_at
+ * @property string $timezone
  * @property string|null $idp_id
  * @property string|null $remember_token
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
 #[ObservedBy(UserObserver::class)]
-#[Fillable(['name', 'email'])]
+#[Fillable(['name', 'email', 'timezone'])]
 #[Hidden(['remember_token'])]
 class User extends Authenticatable implements PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable, PasskeyAuthenticatable;
+
+    /**
+     * Mirrors the column default, so a model that has not been read back from
+     * the database still reports a timezone rather than null.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'timezone' => 'Europe/Amsterdam',
+    ];
 
     /**
      * @return HasMany<Calendar, $this>

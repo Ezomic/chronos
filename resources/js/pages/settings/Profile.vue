@@ -8,6 +8,13 @@ import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { edit } from '@/routes/profile';
 
 defineOptions({
@@ -20,6 +27,10 @@ defineOptions({
         ],
     },
 });
+
+defineProps<{
+    timezones: string[];
+}>();
 
 const page = usePage();
 const user = computed(() => page.props.auth.user);
@@ -34,7 +45,7 @@ const user = computed(() => page.props.auth.user);
         <Heading
             variant="small"
             title="Profile"
-            description="Update your name and email address"
+            description="Update your name, email address and timezone"
         />
 
         <Form
@@ -69,6 +80,32 @@ const user = computed(() => page.props.auth.user);
                     placeholder="Email address"
                 />
                 <InputError class="mt-2" :message="errors.email" />
+            </div>
+
+            <div class="grid gap-2">
+                <Label for="timezone">Timezone</Label>
+                <Select
+                    name="timezone"
+                    :default-value="user.timezone as string"
+                >
+                    <SelectTrigger id="timezone" class="mt-1 w-full">
+                        <SelectValue placeholder="Select a timezone" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem
+                            v-for="zone in timezones"
+                            :key="zone"
+                            :value="zone"
+                        >
+                            {{ zone.replace(/_/g, ' ') }}
+                        </SelectItem>
+                    </SelectContent>
+                </Select>
+                <p class="text-xs text-muted-foreground">
+                    New events default to this timezone, and so do events other
+                    apps create for you without naming one.
+                </p>
+                <InputError class="mt-2" :message="errors.timezone" />
             </div>
 
             <div class="flex items-center gap-4">

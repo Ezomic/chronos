@@ -316,6 +316,42 @@ it('still prefers the default calendar over the alphabetical first', function ()
     expect(Event::query()->firstOrFail()->calendar_id)->toBe($default->id);
 });
 
+it('falls back to the user timezone when the request names none', function () {
+    $user = userWithDefaultCalendar();
+    $user->forceFill(['timezone' => 'Europe/Amsterdam'])->save();
+    Sanctum::actingAs($user, ['events:create']);
+
+    $this->postJson('/api/events', [
+        'title' => 'Posted without a timezone',
+        'starts_at' => '2026-07-20T09:00:00Z',
+        'ends_at' => '2026-07-20T10:00:00Z',
+    ])->assertCreated();
+
+    // The instant is unchanged; the event is stored in the zone the calendar
+    // will draw it in, rather than in UTC.
+    $event = Event::query()->firstOrFail();
+    expect($event->timezone)->toBe('Europe/Amsterdam')
+        ->and($event->starts_at->utc()->format('H:i'))->toBe('09:00');
+});
+
+it('still honours an explicit timezone over the user setting', function () {
+    $user = userWithDefaultCalendar();
+    $user->forceFill(['timezone' => 'Europe/Amsterdam'])->save();
+    Sanctum::actingAs($user, ['events:create']);
+
+    $this->postJson('/api/events', [
+        'title' => 'Explicit',
+        'timezone' => 'Europe/Lisbon',
+        'starts_at' => '2026-07-20T09:00:00',
+        'ends_at' => '2026-07-20T10:00:00',
+    ])->assertCreated();
+
+    $event = Event::query()->firstOrFail();
+    expect($event->timezone)->toBe('Europe/Lisbon')
+        // 09:00 Lisbon (+01:00) is 08:00 UTC.
+        ->and($event->starts_at->utc()->format('H:i'))->toBe('08:00');
+});
+
 it('returns 422 when the user has no writable calendar', function () {
     $user = User::factory()->create();
     // Users are provisioned with a default calendar; remove it to exercise the guard.

@@ -61,6 +61,47 @@ class ProfileUpdateTest extends TestCase
         $this->assertNotNull($user->refresh()->email_verified_at);
     }
 
+    public function test_timezone_can_be_updated()
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->patch(route('profile.update'), [
+                'name' => $user->name,
+                'email' => $user->email,
+                'timezone' => 'Europe/Lisbon',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('Europe/Lisbon', $user->refresh()->timezone);
+    }
+
+    public function test_an_unknown_timezone_is_rejected()
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->patch(route('profile.update'), [
+                'name' => $user->name,
+                'email' => $user->email,
+                'timezone' => 'Mars/Olympus_Mons',
+            ])
+            ->assertSessionHasErrors('timezone');
+
+        $this->assertSame('Europe/Amsterdam', $user->refresh()->timezone);
+    }
+
+    public function test_the_profile_page_offers_the_timezone_list()
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->get(route('profile.edit'))
+            ->assertInertia(fn ($page) => $page
+                ->has('timezones')
+                ->where('timezones', fn ($zones) => collect($zones)->contains('Europe/Amsterdam')));
+    }
+
     public function test_user_can_delete_their_account()
     {
         $user = User::factory()->create();
