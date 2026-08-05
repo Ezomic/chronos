@@ -206,6 +206,15 @@ it('answers a delete of its own event with 204', function () {
     $this->deleteJson("/api/v1/events/{$event->id}")->assertStatus(204);
 });
 
+it('exposes no route that hands an events token the user record', function () {
+    $this->withToken(contractToken(contractUser(), ['events:create']));
+
+    // Starter-kit scaffolding that nothing in the estate called, and that an
+    // events:create token could read (id, name, email, idp_id).
+    $this->getJson('/api/user')->assertNotFound();
+    $this->getJson('/api/v1/user')->assertNotFound();
+});
+
 it('takes its consumer allow-list from config', function () {
     config()->set('chronos.consumers', ['zero' => 'Open in Mail']);
 
