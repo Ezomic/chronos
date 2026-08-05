@@ -49,6 +49,16 @@ class StoreEventRequest extends FormRequest
     }
 
     /**
+     * @return array<int, string>
+     */
+    private function consumerApps(): array
+    {
+        $consumers = config('chronos.consumers');
+
+        return array_keys(is_array($consumers) ? $consumers : []);
+    }
+
+    /**
      * @return Builder<Calendar>
      */
     private function writableCalendars(): Builder
@@ -82,8 +92,9 @@ class StoreEventRequest extends FormRequest
 
             'source' => ['nullable', 'array'],
             // Only known apps: keeps source_url from becoming an open redirect
-            // when the calendar later renders it as a link.
-            'source.app' => ['required_with:source', 'string', Rule::in(['zero', 'tracker', 'tempo'])],
+            // when the calendar later renders it as a link. Onboarding another
+            // consumer is a config change, not a code change.
+            'source.app' => ['required_with:source', 'string', Rule::in($this->consumerApps())],
             'source.type' => ['required_with:source', 'string', 'max:40'],
             'source.id' => ['required_with:source', 'string', 'max:64'],
             'source.url' => ['required_with:source', 'url', 'max:2048'],

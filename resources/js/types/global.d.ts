@@ -21,6 +21,7 @@ declare module '@inertiajs/core' {
             auth: Auth;
             portalApps: PortalApp[];
             portalCategories: PortalCategory[];
+            eventSourceLabels: Record<string, string>;
             sidebarOpen: boolean;
             [key: string]: unknown;
         };
