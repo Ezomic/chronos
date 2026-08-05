@@ -12,7 +12,9 @@ use App\Services\Calendar\GoogleCalendarService;
 use App\Services\Calendar\IcsCalendarService;
 use App\Services\Calendar\MicrosoftCalendarService;
 use App\Services\Calendar\OAuthTokenRefresher;
+use App\Services\Calendar\SyncFailureMessage;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class SyncConnectedAccountAction
@@ -22,6 +24,7 @@ class SyncConnectedAccountAction
         private readonly GoogleCalendarService $google,
         private readonly MicrosoftCalendarService $microsoft,
         private readonly IcsCalendarService $ics,
+        private readonly SyncFailureMessage $failureMessage,
     ) {}
 
     public function handle(ConnectedAccount $account): void
@@ -48,7 +51,20 @@ class SyncConnectedAccountAction
 
             $account->update(['sync_status' => 'idle', 'sync_status_since' => now(), 'last_synced_at' => now()]);
         } catch (\Throwable $e) {
-            $account->update(['sync_status' => 'error', 'sync_status_since' => now(), 'sync_error' => $e->getMessage()]);
+            // Never the raw message: it can carry the feed URL or a provider
+            // response body, and this column is rendered in Settings.
+            $account->update([
+                'sync_status' => 'error',
+                'sync_status_since' => now(),
+                'sync_error' => $this->failureMessage->for($e),
+            ]);
+
+            Log::error('Connected account sync failed.', [
+                'account_id' => $account->id,
+                'provider' => $account->provider,
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+            ]);
 
             throw $e;
         }
