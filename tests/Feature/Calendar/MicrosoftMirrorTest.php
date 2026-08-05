@@ -6,6 +6,7 @@ use App\Models\ConnectedAccount;
 use App\Models\Event;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 
 function microsoftAccount(): ConnectedAccount
@@ -106,6 +107,61 @@ it('requests a local timezone and stores mirrored events in it', function () {
 
     Http::assertSent(fn (Request $request) => str_contains($request->url(), 'calendarView')
         && $request->header('Prefer')[0] === 'outlook.timezone="Europe/Amsterdam"');
+});
+
+it('follows @odata.nextLink so every page of events is mirrored', function () {
+    $base = CarbonImmutable::now()->addDays(5);
+
+    $instance = fn (string $id, int $offset): array => [
+        'id' => $id,
+        'subject' => 'Paged',
+        'isAllDay' => false,
+        'start' => ['dateTime' => $base->addDays($offset)->format('Y-m-d').'T09:00:00.0000000', 'timeZone' => 'UTC'],
+        'end' => ['dateTime' => $base->addDays($offset)->format('Y-m-d').'T09:30:00.0000000', 'timeZone' => 'UTC'],
+    ];
+
+    Http::fake([
+        '*/me/calendars' => Http::response(graphCalendars()),
+        '*/calendarView*' => Http::sequence()
+            ->push([
+                'value' => [$instance('evt-1', 0), $instance('evt-2', 1)],
+                '@odata.nextLink' => 'https://graph.microsoft.com/v1.0/me/calendars/cal-1/calendarView?$skiptoken=page2',
+            ])
+            ->push(['value' => [$instance('evt-3', 2)]]),
+    ]);
+
+    $account = microsoftAccount();
+    syncMs($account);
+
+    $calendar = Calendar::query()->where('connected_account_id', $account->id)->firstOrFail();
+    expect(Event::where('calendar_id', $calendar->id)->pluck('external_id')->sort()->values()->all())
+        ->toBe(['evt-1', 'evt-2', 'evt-3']);
+
+    Http::assertSent(fn (Request $request) => str_contains($request->url(), 'skiptoken=page2'));
+});
+
+it('keeps mirrored Microsoft events when a later page fails mid-sync', function () {
+    $base = CarbonImmutable::now()->addDays(5);
+
+    $page = ['value' => [[
+        'id' => 'evt-1', 'subject' => 'Paged', 'isAllDay' => false,
+        'start' => ['dateTime' => $base->format('Y-m-d').'T09:00:00.0000000', 'timeZone' => 'UTC'],
+        'end' => ['dateTime' => $base->format('Y-m-d').'T09:30:00.0000000', 'timeZone' => 'UTC'],
+    ]]];
+
+    Http::fake([
+        '*/me/calendars' => Http::response(graphCalendars()),
+        '*/calendarView*' => Http::sequence()
+            ->push($page)
+            ->push($page + ['@odata.nextLink' => 'https://graph.microsoft.com/v1.0/me/calendars/cal-1/calendarView?$skiptoken=page2'])
+            ->push('upstream exploded', 500),
+    ]);
+
+    $account = microsoftAccount();
+    syncMs($account);
+
+    expect(fn () => syncMs($account))->toThrow(RequestException::class);
+    expect(Event::query()->pluck('external_id')->all())->toBe(['evt-1']);
 });
 
 it('maps an all-day Microsoft event to a midnight-UTC span', function () {

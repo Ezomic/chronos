@@ -6,6 +6,7 @@ namespace App\Services\Calendar;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Http;
+use RuntimeException;
 
 /**
  * Thin read-only wrapper over the Google Calendar API. No SDK: two endpoints
@@ -15,26 +16,17 @@ class GoogleCalendarService implements CalendarSource
 {
     private const BASE = 'https://www.googleapis.com/calendar/v3';
 
+    /** Runaway guard; a real calendar never comes close to this many pages. */
+    private const MAX_PAGES = 50;
+
     /**
      * @return array<int, array<string, mixed>>
      */
     public function calendars(string $accessToken): array
     {
-        $response = Http::withToken($accessToken)->get(self::BASE.'/users/me/calendarList');
-        $response->throw();
-
-        $items = $response->json('items', []);
         $calendars = [];
 
-        if (! is_array($items)) {
-            return [];
-        }
-
-        foreach ($items as $item) {
-            if (! is_array($item)) {
-                continue;
-            }
-
+        foreach ($this->pages($accessToken, self::BASE.'/users/me/calendarList', []) as $item) {
             $calendars[] = [
                 'external_id' => $item['id'],
                 'name' => $item['summaryOverride'] ?? $item['summary'] ?? $item['id'],
@@ -54,7 +46,8 @@ class GoogleCalendarService implements CalendarSource
      */
     public function events(string $accessToken, string $calendarId, CarbonImmutable $from, CarbonImmutable $to): array
     {
-        $response = Http::withToken($accessToken)->get(
+        $items = $this->pages(
+            $accessToken,
             self::BASE.'/calendars/'.rawurlencode($calendarId).'/events',
             [
                 'singleEvents' => 'true',
@@ -64,30 +57,79 @@ class GoogleCalendarService implements CalendarSource
                 'orderBy' => 'startTime',
             ],
         );
-        $response->throw();
 
-        $items = $response->json('items', []);
         $events = [];
 
-        if (! is_array($items)) {
-            return [];
-        }
-
         foreach ($items as $item) {
-            if (! is_array($item) || ($item['status'] ?? '') === 'cancelled') {
+            if (($item['status'] ?? '') === 'cancelled') {
                 continue;
             }
 
-            $keyed = [];
-
-            foreach ($item as $key => $value) {
-                $keyed[(string) $key] = $value;
-            }
-
-            $events[] = $this->normalize($keyed);
+            $events[] = $this->normalize($item);
         }
 
         return $events;
+    }
+
+    /**
+     * Read every page of a Google collection, following nextPageToken to the
+     * end. A partial read matters here: the caller prunes stored events that
+     * weren't in the response, so a truncated page would delete events that
+     * still exist upstream. Running past the page cap therefore throws rather
+     * than handing back a short list.
+     *
+     * @param  array<string, mixed>  $query
+     * @return array<int, array<string, mixed>>
+     */
+    private function pages(string $accessToken, string $url, array $query): array
+    {
+        $items = [];
+        $pageToken = null;
+        $pages = 0;
+
+        do {
+            $response = Http::withToken($accessToken)->get(
+                $url,
+                $pageToken === null ? $query : array_merge($query, ['pageToken' => $pageToken]),
+            );
+            $response->throw();
+
+            $page = $response->json('items', []);
+
+            if (is_array($page)) {
+                foreach ($page as $item) {
+                    if (is_array($item)) {
+                        $items[] = $this->stringKeyed($item);
+                    }
+                }
+            }
+
+            $next = $response->json('nextPageToken');
+            $pageToken = is_string($next) && $next !== '' ? $next : null;
+        } while ($pageToken !== null && ++$pages < self::MAX_PAGES);
+
+        if ($pageToken !== null) {
+            throw new RuntimeException(
+                'Google returned more than '.self::MAX_PAGES.' pages for '.$url.'; refusing a partial sync.'
+            );
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param  array<mixed, mixed>  $item
+     * @return array<string, mixed>
+     */
+    private function stringKeyed(array $item): array
+    {
+        $keyed = [];
+
+        foreach ($item as $key => $value) {
+            $keyed[(string) $key] = $value;
+        }
+
+        return $keyed;
     }
 
     /**

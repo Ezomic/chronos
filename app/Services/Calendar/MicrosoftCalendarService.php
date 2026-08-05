@@ -6,6 +6,7 @@ namespace App\Services\Calendar;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Http;
+use RuntimeException;
 
 /**
  * Thin read-only wrapper over the Microsoft Graph calendar API.
@@ -20,26 +21,17 @@ class MicrosoftCalendarService implements CalendarSource
 {
     private const BASE = 'https://graph.microsoft.com/v1.0';
 
+    /** Runaway guard; a real mailbox never comes close to this many pages. */
+    private const MAX_PAGES = 50;
+
     /**
      * @return array<int, array<string, mixed>>
      */
     public function calendars(string $accessToken): array
     {
-        $response = Http::withToken($accessToken)->get(self::BASE.'/me/calendars');
-        $response->throw();
-
-        $items = $response->json('value', []);
         $calendars = [];
 
-        if (! is_array($items)) {
-            return [];
-        }
-
-        foreach ($items as $item) {
-            if (! is_array($item)) {
-                continue;
-            }
-
+        foreach ($this->pages($accessToken, self::BASE.'/me/calendars', []) as $item) {
             $calendars[] = [
                 'external_id' => $item['id'],
                 'name' => $item['name'] ?? $item['id'],
@@ -62,41 +54,95 @@ class MicrosoftCalendarService implements CalendarSource
         $configuredTimezone = config('services.microsoft.timezone', 'UTC');
         $timezone = is_string($configuredTimezone) ? $configuredTimezone : 'UTC';
 
-        $response = Http::withToken($accessToken)
-            ->withHeaders(['Prefer' => "outlook.timezone=\"{$timezone}\""])
-            ->get(
-                self::BASE.'/me/calendars/'.rawurlencode($calendarId).'/calendarView',
-                [
-                    'startDateTime' => $from->toIso8601String(),
-                    'endDateTime' => $to->toIso8601String(),
-                    '$top' => 1000,
-                    '$orderby' => 'start/dateTime',
-                ],
-            );
-        $response->throw();
+        $items = $this->pages(
+            $accessToken,
+            self::BASE.'/me/calendars/'.rawurlencode($calendarId).'/calendarView',
+            [
+                'startDateTime' => $from->toIso8601String(),
+                'endDateTime' => $to->toIso8601String(),
+                '$top' => 1000,
+                '$orderby' => 'start/dateTime',
+            ],
+            ['Prefer' => "outlook.timezone=\"{$timezone}\""],
+        );
 
-        $items = $response->json('value', []);
         $events = [];
 
-        if (! is_array($items)) {
-            return [];
-        }
-
         foreach ($items as $item) {
-            if (! is_array($item)) {
-                continue;
-            }
-
-            $keyed = [];
-
-            foreach ($item as $key => $value) {
-                $keyed[(string) $key] = $value;
-            }
-
-            $events[] = $this->normalize($keyed);
+            $events[] = $this->normalize($item);
         }
 
         return $events;
+    }
+
+    /**
+     * Read every page of a Graph collection, following @odata.nextLink (an
+     * absolute URL that already carries the original query) to the end. A
+     * partial read matters here: the caller prunes stored events that weren't
+     * in the response, so a truncated page would delete events that still
+     * exist upstream. Running past the page cap therefore throws rather than
+     * handing back a short list.
+     *
+     * @param  array<string, mixed>  $query
+     * @param  array<string, string>  $headers
+     * @return array<int, array<string, mixed>>
+     */
+    private function pages(string $accessToken, string $url, array $query, array $headers = []): array
+    {
+        $items = [];
+        $next = $url;
+        $first = true;
+        $pages = 0;
+
+        do {
+            $request = Http::withToken($accessToken)->withHeaders($headers);
+
+            // A nextLink already carries the original query; passing one of our
+            // own (even an empty array) would replace its skiptoken and loop.
+            $response = $first ? $request->get($next, $query) : $request->get($next);
+            $response->throw();
+
+            $page = $response->json('value', []);
+
+            if (is_array($page)) {
+                foreach ($page as $item) {
+                    if (is_array($item)) {
+                        $items[] = $this->stringKeyed($item);
+                    }
+                }
+            }
+
+            // Read the body rather than json('@odata.nextLink'): data_get would
+            // split that key on its dot and look for a nested "nextLink".
+            $body = $response->json();
+            $link = is_array($body) ? ($body['@odata.nextLink'] ?? null) : null;
+
+            $next = is_string($link) && $link !== '' ? $link : null;
+            $first = false;
+        } while ($next !== null && ++$pages < self::MAX_PAGES);
+
+        if ($next !== null) {
+            throw new RuntimeException(
+                'Microsoft Graph returned more than '.self::MAX_PAGES.' pages for '.$url.'; refusing a partial sync.'
+            );
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param  array<mixed, mixed>  $item
+     * @return array<string, mixed>
+     */
+    private function stringKeyed(array $item): array
+    {
+        $keyed = [];
+
+        foreach ($item as $key => $value) {
+            $keyed[(string) $key] = $value;
+        }
+
+        return $keyed;
     }
 
     /**
