@@ -12,6 +12,7 @@ use App\DataObjects\EventSource;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\StoreEventRequest;
 use App\Http\Requests\Api\UpdateEventRequest;
+use App\Models\Calendar;
 use App\Models\Event;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -52,11 +53,8 @@ class EventController extends Controller
         }
 
         // The token is bound to a user, so events land in their default
-        // writable calendar without a calendar parameter.
-        $calendar = $user->calendars()
-            ->where('is_writable', true)
-            ->orderByDesc('is_default')
-            ->first();
+        // writable calendar unless the request named one.
+        $calendar = $request->targetCalendar() ?? $this->fallbackCalendarFor($user);
 
         abort_if($calendar === null, 422, 'No writable calendar is available.');
 
@@ -192,6 +190,22 @@ class EventController extends Controller
         );
 
         return $app;
+    }
+
+    /**
+     * Where an event lands when the request did not name a calendar. Ordered
+     * all the way down to the key: with several writable calendars and none
+     * flagged default, "whichever the database returns first" is not an answer,
+     * and it can change between requests.
+     */
+    private function fallbackCalendarFor(User $user): ?Calendar
+    {
+        return $user->calendars()
+            ->where('is_writable', true)
+            ->orderByDesc('is_default')
+            ->orderBy('name')
+            ->orderBy('id')
+            ->first();
     }
 
     private function sourceFrom(StoreEventRequest $request): ?EventSource

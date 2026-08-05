@@ -209,6 +209,113 @@ it('stores an all-day event as an exclusive midnight-UTC span', function () {
         ->and($event->ends_at->format('Y-m-d H:i'))->toBe('2026-07-21 00:00');
 });
 
+it('routes an event to a calendar named in the request', function () {
+    $user = userWithDefaultCalendar();
+    $training = Calendar::factory()->for($user)->create(['name' => 'Training']);
+    Sanctum::actingAs($user, ['events:create']);
+
+    $this->postJson('/api/events', [
+        'calendar' => 'Training',
+        'title' => 'Easy 40',
+        'starts_at' => '2026-07-20T09:00:00Z',
+        'ends_at' => '2026-07-20T09:40:00Z',
+    ])->assertCreated();
+
+    expect(Event::query()->firstOrFail()->calendar_id)->toBe($training->id);
+});
+
+it('routes an event to a calendar named by id', function () {
+    $user = userWithDefaultCalendar();
+    $training = Calendar::factory()->for($user)->create(['name' => 'Training']);
+    Sanctum::actingAs($user, ['events:create']);
+
+    $this->postJson('/api/events', [
+        'calendar' => $training->id,
+        'title' => 'Easy 40',
+        'starts_at' => '2026-07-20T09:00:00Z',
+        'ends_at' => '2026-07-20T09:40:00Z',
+    ])->assertCreated();
+
+    expect(Event::query()->firstOrFail()->calendar_id)->toBe($training->id);
+});
+
+it('rejects a calendar that does not exist', function () {
+    Sanctum::actingAs(userWithDefaultCalendar(), ['events:create']);
+
+    $this->postJson('/api/events', [
+        'calendar' => 'Nowhere',
+        'title' => 'Lost',
+        'starts_at' => '2026-07-20T09:00:00Z',
+        'ends_at' => '2026-07-20T10:00:00Z',
+    ])->assertJsonValidationErrors('calendar');
+
+    expect(Event::query()->count())->toBe(0);
+});
+
+it('rejects a mirrored calendar as a target', function () {
+    $user = userWithDefaultCalendar();
+    $mirrored = Calendar::factory()->for($user)->mirrored()->create(['name' => 'Work (Google)']);
+    Sanctum::actingAs($user, ['events:create']);
+
+    $this->postJson('/api/events', [
+        'calendar' => $mirrored->id,
+        'title' => 'Read only',
+        'starts_at' => '2026-07-20T09:00:00Z',
+        'ends_at' => '2026-07-20T10:00:00Z',
+    ])->assertJsonValidationErrors('calendar');
+});
+
+it('rejects another user calendar as a target', function () {
+    $user = userWithDefaultCalendar();
+    $theirs = Calendar::factory()->create(['name' => 'Theirs']);
+    Sanctum::actingAs($user, ['events:create']);
+
+    $this->postJson('/api/events', [
+        'calendar' => $theirs->id,
+        'title' => 'Not mine',
+        'starts_at' => '2026-07-20T09:00:00Z',
+        'ends_at' => '2026-07-20T10:00:00Z',
+    ])->assertJsonValidationErrors('calendar');
+});
+
+it('falls back deterministically when no calendar is flagged default', function () {
+    $user = User::factory()->create();
+    $user->calendars()->delete();
+
+    // Created out of alphabetical order, none of them default.
+    Calendar::factory()->for($user)->create(['name' => 'Work']);
+    $admin = Calendar::factory()->for($user)->create(['name' => 'Admin']);
+    Calendar::factory()->for($user)->create(['name' => 'Training']);
+
+    Sanctum::actingAs($user, ['events:create']);
+
+    foreach (['one', 'two'] as $index => $title) {
+        $this->postJson('/api/events', [
+            'title' => $title,
+            'starts_at' => '2026-07-2'.$index.'T09:00:00Z',
+            'ends_at' => '2026-07-2'.$index.'T10:00:00Z',
+        ])->assertCreated();
+    }
+
+    expect(Event::query()->pluck('calendar_id')->unique()->all())->toBe([$admin->id]);
+});
+
+it('still prefers the default calendar over the alphabetical first', function () {
+    $user = userWithDefaultCalendar();
+    Calendar::factory()->for($user)->create(['name' => 'Admin']);
+
+    Sanctum::actingAs($user, ['events:create']);
+
+    $this->postJson('/api/events', [
+        'title' => 'Goes to Personal',
+        'starts_at' => '2026-07-20T09:00:00Z',
+        'ends_at' => '2026-07-20T10:00:00Z',
+    ])->assertCreated();
+
+    $default = $user->calendars()->where('is_default', true)->firstOrFail();
+    expect(Event::query()->firstOrFail()->calendar_id)->toBe($default->id);
+});
+
 it('returns 422 when the user has no writable calendar', function () {
     $user = User::factory()->create();
     // Users are provisioned with a default calendar; remove it to exercise the guard.
