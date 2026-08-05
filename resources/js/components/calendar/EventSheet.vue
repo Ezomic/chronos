@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { router } from '@inertiajs/vue3';
+import { router, usePage } from '@inertiajs/vue3';
 import {
     getLocalTimeZone,
     parseAbsolute,
@@ -49,6 +49,8 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{ 'update:open': [boolean] }>();
+
+const page = usePage();
 
 interface FormState {
     calendar_id: number | null;
@@ -267,6 +269,17 @@ const endTime = computed({
     },
 });
 
+// The timezone the user chose in Settings, so an event created here is stored
+// the same way as one another app creates for them. Their browser's zone is the
+// fallback for a session that has no user yet.
+function preferredTimeZone(): string {
+    const configured = page.props.auth?.user?.timezone;
+
+    return typeof configured === 'string' && configured !== ''
+        ? configured
+        : getLocalTimeZone();
+}
+
 function payload() {
     return {
         calendar_id: form.calendar_id,
@@ -274,7 +287,7 @@ function payload() {
         description: form.description || null,
         location: form.location || null,
         all_day: form.all_day,
-        timezone: form.all_day ? null : getLocalTimeZone(),
+        timezone: form.all_day ? null : preferredTimeZone(),
         starts_at: form.start,
         ends_at: form.end,
         frequency: form.frequency,

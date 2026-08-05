@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Concerns;
 
+use App\Models\User;
 use Carbon\CarbonImmutable;
 
 trait ResolvesEventTimes
@@ -28,13 +29,31 @@ trait ResolvesEventTimes
             ];
         }
 
-        $configuredTimezone = config('app.timezone');
-        $timezone = $timezone ?: (is_string($configuredTimezone) ? $configuredTimezone : 'UTC');
+        $timezone = $timezone ?: $this->fallbackTimezone();
 
         return [
             CarbonImmutable::parse($start, $timezone)->utc(),
             CarbonImmutable::parse($end, $timezone)->utc(),
             $timezone,
         ];
+    }
+
+    /**
+     * The zone to store an event in when the request did not name one. The
+     * user's own setting comes first: app.timezone is UTC, and the calendar
+     * renders every event in its stored zone, so falling back to config would
+     * draw an event posted by another app an hour or two out of place.
+     */
+    private function fallbackTimezone(): string
+    {
+        $user = auth()->user();
+
+        if ($user instanceof User && $user->timezone !== '') {
+            return $user->timezone;
+        }
+
+        $configured = config('app.timezone');
+
+        return is_string($configured) ? $configured : 'UTC';
     }
 }
