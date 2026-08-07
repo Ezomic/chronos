@@ -21,7 +21,7 @@
         "sabre/vobject": "^4.5",
         "simshaun/recurr": "^5.0",
         "socialiteproviders/microsoft": "^4.9",
-        "thijssensoftware/id-client": "^0.1.0"
+        "thijssensoftware/id-client": "^0.2.0"
     },
     "require-dev": {
         "fakerphp/faker": "^1.24",
@@ -124,9 +124,11 @@
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
-    "repositories": [{
-        "name": "id-client",
-        "type": "vcs",
-        "url": "https://github.com/Ezomic/id-client.git"
-    }]
+    "repositories": [
+        {
+            "name": "id-client",
+            "type": "vcs",
+            "url": "https://github.com/Ezomic/id-client.git"
+        }
+    ]
 }

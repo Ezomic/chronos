@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "1c05cdaa452a2994b74b438681d85bd5",
+    "content-hash": "c1f0f82da128e0a1a9350347af181b00",
     "packages": [
         {
             "name": "bacon/bacon-qr-code",
@@ -8195,16 +8195,16 @@
         },
         {
             "name": "thijssensoftware/id-client",
-            "version": "0.1.0",
+            "version": "0.2.0",
             "source": {
                 "type": "git",
-                "url": "https://github.com/Ezomic/id-client.git",
-                "reference": "7fb1cd43ed65f7e156d44d0a0a7bb92df876b208"
+                "url": "git@github.com:Ezomic/id-client.git",
+                "reference": "1cd8e83b57c8644ffb5f87be015dfb7b9a7b3f6b"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/Ezomic/id-client/zipball/7fb1cd43ed65f7e156d44d0a0a7bb92df876b208",
-                "reference": "7fb1cd43ed65f7e156d44d0a0a7bb92df876b208",
+                "url": "https://api.github.com/repos/Ezomic/id-client/zipball/1cd8e83b57c8644ffb5f87be015dfb7b9a7b3f6b",
+                "reference": "1cd8e83b57c8644ffb5f87be015dfb7b9a7b3f6b",
                 "shasum": ""
             },
             "require": {
@@ -8213,7 +8213,9 @@
                 "php": "^8.3"
             },
             "require-dev": {
-                "orchestra/testbench": "^9.0|^10.0"
+                "laravel/pint": "^1.0",
+                "orchestra/testbench": "^9.0|^10.0|^11.0",
+                "pestphp/pest": "^3.0|^4.0"
             },
             "type": "library",
             "extra": {
@@ -8228,15 +8230,24 @@
                     "Thijssensoftware\\IdClient\\": "src/"
                 }
             },
+            "autoload-dev": {
+                "psr-4": {
+                    "Thijssensoftware\\IdClient\\Tests\\": "tests/"
+                }
+            },
+            "scripts": {
+                "test": [
+                    "pest"
+                ],
+                "lint": [
+                    "pint"
+                ]
+            },
             "license": [
                 "proprietary"
             ],
             "description": "Client for signing in workflow apps against Thijssensoftware ID (SSO).",
-            "support": {
-                "source": "https://github.com/Ezomic/id-client/tree/v0.1.0",
-                "issues": "https://github.com/Ezomic/id-client/issues"
-            },
-            "time": "2026-07-10T00:58:22+00:00"
+            "time": "2026-08-07T20:13:26+00:00"
         },
         {
             "name": "tijsverkoyen/css-to-inline-styles",
