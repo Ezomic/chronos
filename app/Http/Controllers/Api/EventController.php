@@ -10,13 +10,16 @@ use App\Concerns\ResolvesEventTimes;
 use App\Concerns\ResolvesTokenApp;
 use App\DataObjects\EventSource;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\IndexEventRequest;
 use App\Http\Requests\Api\StoreEventRequest;
 use App\Http\Requests\Api\UpdateEventRequest;
 use App\Models\Calendar;
 use App\Models\Event;
 use App\Models\User;
+use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 class EventController extends Controller
 {
@@ -81,13 +84,17 @@ class EventController extends Controller
     }
 
     /**
-     * The calling app's own events, optionally narrowed to one source row.
+     * The calling app's own events, optionally narrowed to one source row, or
+     * to everything that has changed since a given moment.
      */
-    public function index(Request $request): JsonResponse
+    public function index(IndexEventRequest $request): JsonResponse
     {
         $app = $this->requireTokenApp();
+        $since = $request->filled('changed_since')
+            ? CarbonImmutable::parse($request->string('changed_since')->toString())
+            : null;
 
-        $events = Event::query()
+        $query = Event::query()
             ->whereIn('calendar_id', $this->currentUser()->calendars()->select('id'))
             ->where('source_app', $app)
             ->when(
@@ -97,17 +104,50 @@ class EventController extends Controller
             ->when(
                 $request->filled('source.id'),
                 fn ($query) => $query->where('source_id', $request->string('source.id')->toString()),
-            )
-            ->orderBy('starts_at')
-            ->limit(self::MAX_RESULTS)
-            ->get();
+            );
+
+        if ($since !== null) {
+            // Deleted events are the point of polling, so they come back as
+            // tombstones rather than silently vanishing from the listing.
+            $query->withTrashed()
+                ->where('updated_at', '>=', $since)
+                ->orderBy('updated_at');
+        } else {
+            $query->orderBy('starts_at');
+        }
+
+        $events = $query->limit(self::MAX_RESULTS)->get();
 
         return response()->json([
             'data' => $events->map(fn (Event $event) => $this->payload($event))->all(),
-            // A bare list is capped; narrow with a source filter to be sure of
-            // seeing everything.
+            // A bare list is capped; narrow with a source filter, or poll again
+            // from changed_through, to be sure of seeing everything.
             'truncated' => $events->count() === self::MAX_RESULTS,
+            'changed_through' => $this->changedThrough($events, $since),
         ]);
+    }
+
+    /**
+     * How far this response read, for the caller's next changed_since.
+     *
+     * The boundary is inclusive on purpose. updated_at has second precision, so
+     * an exclusive one would drop a row that changed in the same second as the
+     * last one returned. Repeating a row is harmless when the caller keys on
+     * id; losing one is not.
+     *
+     * @param  Collection<int, Event>  $events
+     */
+    private function changedThrough(Collection $events, ?CarbonImmutable $since): ?string
+    {
+        if ($since === null) {
+            return null;
+        }
+
+        $latest = $events->max('updated_at');
+
+        return $latest instanceof CarbonInterface
+            ? $latest->toIso8601String()
+            : $since->toIso8601String();
     }
 
     public function update(UpdateEventRequest $request, Event $event): JsonResponse
@@ -257,6 +297,7 @@ class EventController extends Controller
             'all_day' => $event->all_day,
             'timezone' => $event->timezone,
             'calendar_id' => $event->calendar_id,
+            'deleted' => $event->trashed(),
             'source' => $event->source_app === null ? null : [
                 'app' => $event->source_app,
                 'type' => $event->source_type,

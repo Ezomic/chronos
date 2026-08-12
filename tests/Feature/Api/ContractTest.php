@@ -34,6 +34,7 @@ const CONTRACT_EVENT_KEYS = [
     'all_day',
     'timezone',
     'calendar_id',
+    'deleted',
     'source',
     'url',
 ];
@@ -134,7 +135,7 @@ it('stores an all-day event as an exclusive midnight-UTC span', function () {
         ->and($event->ends_at->format('Y-m-d H:i'))->toBe('2026-07-21 00:00');
 });
 
-it('wraps a listing in data and truncated', function () {
+it('wraps a listing in data, truncated and changed_through', function () {
     $user = contractUser();
     Event::factory()->for($user->calendars()->firstOrFail())->create([
         'source_app' => 'zero', 'source_type' => 'email', 'source_id' => 'MSG-1',
@@ -145,7 +146,7 @@ it('wraps a listing in data and truncated', function () {
 
     $response = $this->getJson('/api/v1/events')->assertOk();
 
-    expect(array_keys($response->json()))->toBe(['data', 'truncated'])
+    expect(array_keys($response->json()))->toBe(['data', 'truncated', 'changed_through'])
         ->and(array_keys($response->json('data.0')))->toBe(CONTRACT_EVENT_KEYS)
         ->and($response->json('truncated'))->toBeFalse();
 });

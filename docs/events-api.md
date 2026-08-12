@@ -129,12 +129,38 @@ GET /api/v1/events?source[type]=email&source[id]=01JZ8XABCDEF0123456789ABCD
 ```json
 {
   "data": [ { "...": "event" } ],
-  "truncated": false
+  "truncated": false,
+  "changed_through": null
 }
 ```
 
 Capped at 200 events. `truncated` is true when the cap was hit; narrow with a
-source filter rather than paging.
+source filter, or poll from `changed_through`, rather than paging.
+
+### Polling for changes
+
+Pass `changed_since` (ISO 8601) to get everything the calling app's events have
+done since that moment, rather than what is currently on the calendar:
+
+```
+GET /api/v1/events?changed_since=2026-07-20T09:00:00%2B00:00
+```
+
+This is the only listing that includes **tombstones**: an event the user deleted
+comes back with `"deleted": true` and its last known state, so a consumer can
+tell "moved" from "gone". Without `changed_since`, deleted events are simply
+absent.
+
+`changed_through` says how far the response read. Use it as the next
+`changed_since`.
+
+The boundary is **inclusive**, so the last row or rows may repeat on the next
+poll. That is deliberate: `updated_at` has second precision, and an exclusive
+boundary would drop a row that changed in the same second as the last one
+returned. Key on `id` and repeats cost nothing; a dropped change would be
+invisible.
+
+`changed_through` is `null` on a listing that is not polling.
 
 ## PATCH /events/{id}
 
@@ -162,6 +188,7 @@ Every endpoint that returns an event returns this shape:
   "all_day": false,
   "timezone": "Europe/Amsterdam",
   "calendar_id": 1,
+  "deleted": false,
   "source": {
     "app": "zero",
     "type": "email",
@@ -173,7 +200,8 @@ Every endpoint that returns an event returns this shape:
 ```
 
 `source` is `null` for events created in Chronos itself. `url` is a deep link to
-the day the event falls on.
+the day the event falls on. `deleted` is only ever true in a `changed_since`
+listing; everywhere else a deleted event is absent rather than flagged.
 
 ## Status codes
 
