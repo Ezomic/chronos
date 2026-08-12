@@ -82,7 +82,7 @@ class CalendarController extends Controller
             ->whereNotNull('rrule')
             ->where('starts_at', '<', $to)
             ->when($search !== '', $searchScope)
-            ->with('calendar:id,name,color,is_writable')
+            ->with(['calendar:id,name,color,is_writable', 'overrides'])
             ->get();
 
         $events = collect();

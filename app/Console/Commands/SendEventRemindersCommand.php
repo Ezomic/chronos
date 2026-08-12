@@ -82,7 +82,7 @@ class SendEventRemindersCommand extends Command
         $events = Event::query()
             ->whereNotNull('rrule')
             ->whereNotNull('reminder_minutes')
-            ->with('calendar.user')
+            ->with(['calendar.user', 'overrides'])
             ->get();
 
         $sent = 0;

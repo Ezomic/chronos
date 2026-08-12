@@ -52,6 +52,15 @@ const emit = defineEmits<{ 'update:open': [boolean] }>();
 
 const page = usePage();
 
+// Editing an occurrence of a series either changes that one or all of them.
+// Only a generated occurrence offers the choice: a detached override is already
+// an event of its own, and editing it means editing it.
+type Scope = 'series' | 'occurrence';
+
+const scope = ref<Scope>('series');
+
+const partOfSeries = computed(() => Boolean(props.event?.rrule));
+
 interface FormState {
     calendar_id: number | null;
     title: string;
@@ -158,9 +167,36 @@ function localDateTime(iso: string, timezone: string): string {
     return `${z.year}-${pad(z.month)}-${pad(z.day)}T${pad(z.hour)}:${pad(z.minute)}`;
 }
 
+/**
+ * Point the date and time fields at whichever the current scope means: the
+ * series anchor, or the occurrence that was clicked.
+ */
+function applyScopeDates(): void {
+    const e = props.event;
+
+    if (!e) {
+        return;
+    }
+
+    const editingSeries = scope.value === 'series';
+    const start = (editingSeries ? e.series_starts_at : null) ?? e.starts_at;
+    const end = (editingSeries ? e.series_ends_at : null) ?? e.ends_at;
+
+    if (e.all_day) {
+        form.start = toCalendarDate(parseAbsolute(start, 'UTC')).toString();
+        form.end = toCalendarDate(parseAbsolute(end, 'UTC'))
+            .subtract({ days: 1 })
+            .toString();
+    } else {
+        form.start = localDateTime(start, e.timezone);
+        form.end = localDateTime(end, e.timezone);
+    }
+}
+
 function hydrate(): void {
     errors.value = {};
     selectedTemplateId.value = null;
+    scope.value = 'series';
     const fallback =
         props.calendars.find((c) => c.is_default) ?? props.calendars[0];
 
@@ -180,19 +216,7 @@ function hydrate(): void {
                 ? 'none'
                 : String(e.reminder_minutes);
 
-        // Editing a series edits its anchor, not the clicked occurrence.
-        const start = e.series_starts_at ?? e.starts_at;
-        const end = e.series_ends_at ?? e.ends_at;
-
-        if (e.all_day) {
-            form.start = toCalendarDate(parseAbsolute(start, 'UTC')).toString();
-            form.end = toCalendarDate(parseAbsolute(end, 'UTC'))
-                .subtract({ days: 1 })
-                .toString();
-        } else {
-            form.start = localDateTime(start, e.timezone);
-            form.end = localDateTime(end, e.timezone);
-        }
+        applyScopeDates();
 
         return;
     }
@@ -220,6 +244,10 @@ watch(
         }
     },
 );
+
+// Switching between one occurrence and the series changes which dates are being
+// edited, so the fields follow. Everything else the user typed stays put.
+watch(scope, () => applyScopeDates());
 
 // Keep the date/time inputs valid as the all-day toggle flips their type.
 watch(
@@ -296,6 +324,22 @@ function payload() {
         until: form.frequency === 'none' ? null : form.until || null,
         reminder_minutes:
             form.reminder === 'none' ? null : Number(form.reminder),
+        ...occurrenceScope(),
+    };
+}
+
+/**
+ * Names the occurrence being singled out. The server needs the start the series
+ * generated, which is the one that was clicked, not whatever the form now says.
+ */
+function occurrenceScope(): Record<string, string> {
+    if (!partOfSeries.value || scope.value !== 'occurrence' || !props.event) {
+        return {};
+    }
+
+    return {
+        scope: 'occurrence',
+        occurrence_starts_at: props.event.starts_at,
     };
 }
 
@@ -439,6 +483,7 @@ function remove(): void {
     processing.value = true;
     router.delete(destroy(props.event.id).url, {
         preserveScroll: true,
+        data: occurrenceScope(),
         onSuccess: () => close(),
         onFinish: () => {
             processing.value = false;
@@ -622,7 +667,41 @@ function remove(): void {
                     {{ errors.ends_at }}
                 </p>
 
-                <div class="grid gap-2">
+                <div
+                    v-if="partOfSeries"
+                    class="grid gap-2 rounded-md border border-input p-3"
+                >
+                    <Label>This is a repeating event</Label>
+                    <div class="flex gap-4 text-sm">
+                        <label class="flex items-center gap-2">
+                            <input
+                                v-model="scope"
+                                type="radio"
+                                name="scope"
+                                value="occurrence"
+                            />
+                            Only this one
+                        </label>
+                        <label class="flex items-center gap-2">
+                            <input
+                                v-model="scope"
+                                type="radio"
+                                name="scope"
+                                value="series"
+                            />
+                            The whole series
+                        </label>
+                    </div>
+                    <p class="text-xs text-muted-foreground">
+                        {{
+                            scope === 'occurrence'
+                                ? 'Saving changes this occurrence alone. Deleting removes it and leaves the rest.'
+                                : 'Saving changes every occurrence. Deleting removes the whole series.'
+                        }}
+                    </p>
+                </div>
+
+                <div v-if="scope === 'series'" class="grid gap-2">
                     <Label for="repeat">Repeat</Label>
                     <select
                         id="repeat"
@@ -639,7 +718,10 @@ function remove(): void {
                     </select>
                 </div>
 
-                <div v-if="form.frequency !== 'none'" class="grid gap-2">
+                <div
+                    v-if="scope === 'series' && form.frequency !== 'none'"
+                    class="grid gap-2"
+                >
                     <Label for="until">Until (optional)</Label>
                     <Input id="until" v-model="form.until" type="date" />
                     <p v-if="errors.until" class="text-sm text-destructive">
