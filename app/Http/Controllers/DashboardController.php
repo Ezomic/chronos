@@ -68,7 +68,7 @@ class DashboardController extends Controller
             ->whereHas('calendar', $ownedVisible)
             ->whereNotNull('rrule')
             ->where('starts_at', '<', $to)
-            ->with('calendar:id,color')
+            ->with(['calendar:id,color', 'overrides'])
             ->get();
 
         $occurrences = [];

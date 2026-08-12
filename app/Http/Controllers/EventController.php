@@ -12,8 +12,10 @@ use App\Http\Requests\UpdateEventRequest;
 use App\Models\Calendar;
 use App\Models\Event;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
 class EventController extends Controller
 {
@@ -60,6 +62,12 @@ class EventController extends Controller
 
         $calendar = Calendar::findOrFail($request->integer('calendar_id'));
 
+        if ($this->targetsOneOccurrence($request, $event)) {
+            $this->writeOverride($request, $event, $calendar);
+
+            return back();
+        }
+
         [$startsAt, $endsAt, $timezone] = $this->resolveEventTimes(
             $request->boolean('all_day'),
             $request->string('timezone')->toString() ?: null,
@@ -91,13 +99,99 @@ class EventController extends Controller
         return back();
     }
 
-    public function destroy(Event $event): RedirectResponse
+    public function destroy(Request $request, Event $event): RedirectResponse
     {
         abort_unless($this->currentUser()->can('delete', $event), 403);
 
+        // Deleting an override on its own would let its series generate the
+        // occurrence again, so the original start is excluded as well.
+        if ($event->overrides_event_id !== null) {
+            $this->excludeOccurrence($event->overriddenSeries, $event->overrides_starts_at);
+            $event->delete();
+
+            return back();
+        }
+
+        if ($this->targetsOneOccurrence($request, $event)) {
+            $start = $this->occurrenceStart($request);
+
+            // Any edit the user had made to this occurrence goes with it.
+            $event->overrides()->where('overrides_starts_at', $start)->delete();
+            $this->excludeOccurrence($event, $start);
+
+            return back();
+        }
+
+        // The foreign key cascade takes the series' overrides with it.
         $event->delete();
 
         return back();
+    }
+
+    /**
+     * Whether this request means one occurrence rather than the whole series.
+     * Only a series has occurrences to single out.
+     */
+    private function targetsOneOccurrence(Request $request, Event $event): bool
+    {
+        return $request->string('scope')->toString() === 'occurrence'
+            && $event->rrule !== null
+            && $request->filled('occurrence_starts_at');
+    }
+
+    private function occurrenceStart(Request $request): CarbonImmutable
+    {
+        return CarbonImmutable::parse($request->string('occurrence_starts_at')->toString())->utc();
+    }
+
+    /**
+     * Store this occurrence as an event of its own. The series keeps its rule
+     * and stops generating that one, so the two never both appear.
+     */
+    private function writeOverride(UpdateEventRequest $request, Event $series, Calendar $calendar): void
+    {
+        [$startsAt, $endsAt, $timezone] = $this->resolveEventTimes(
+            $request->boolean('all_day'),
+            $request->string('timezone')->toString() ?: null,
+            $request->string('starts_at')->toString(),
+            $request->string('ends_at')->toString(),
+        );
+
+        $occurrenceStart = $this->occurrenceStart($request);
+
+        $override = Event::query()->firstOrNew([
+            'overrides_event_id' => $series->id,
+            'overrides_starts_at' => $occurrenceStart,
+        ]);
+
+        $override->forceFill([
+            'calendar_id' => $calendar->id,
+            'title' => $request->string('title')->toString(),
+            'description' => $request->input('description'),
+            'location' => $request->input('location'),
+            'starts_at' => $startsAt,
+            'ends_at' => $endsAt,
+            'all_day' => $request->boolean('all_day'),
+            'timezone' => $timezone,
+            // An occurrence does not carry a rule of its own.
+            'rrule' => null,
+            'overrides_event_id' => $series->id,
+            'overrides_starts_at' => $occurrenceStart,
+            'reminder_minutes' => $this->reminderMinutes($request),
+            'reminder_sent_at' => null,
+        ])->save();
+    }
+
+    private function excludeOccurrence(?Event $series, ?CarbonInterface $startsAt): void
+    {
+        if ($series === null || $startsAt === null) {
+            return;
+        }
+
+        $excluded = $series->excluded_dates ?? [];
+        $excluded[] = CarbonImmutable::instance($startsAt)->utc()->format('Y-m-d H:i:s');
+
+        $series->forceFill(['excluded_dates' => array_values(array_unique($excluded))])->save();
     }
 
     private function reminderMinutes(FormRequest $request): ?int

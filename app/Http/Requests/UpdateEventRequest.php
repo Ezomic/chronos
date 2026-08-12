@@ -35,6 +35,10 @@ class UpdateEventRequest extends FormRequest
             'frequency' => ['nullable', Rule::in(['none', 'daily', 'weekly', 'monthly', 'yearly'])],
             'until' => ['nullable', 'date', 'after_or_equal:starts_at'],
             'reminder_minutes' => ['nullable', 'integer', Rule::in(Event::REMINDER_CHOICES)],
+            // Editing one occurrence of a series rather than all of it; the
+            // occurrence is named by the start the series generated for it.
+            'scope' => ['nullable', Rule::in(['series', 'occurrence'])],
+            'occurrence_starts_at' => ['nullable', 'required_if:scope,occurrence', 'date'],
         ];
     }
 }

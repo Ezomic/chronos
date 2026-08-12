@@ -52,15 +52,52 @@ class RecurrenceExpander
             new BetweenConstraint($from->toDateTime(), $to->toDateTime(), true),
         );
 
+        $skipped = $this->skippedStarts($event);
         $occurrences = [];
 
         foreach ($recurrences as $occurrence) {
+            $startsAt = CarbonImmutable::instance($occurrence->getStart())->utc();
+
+            // The series no longer produces this one: either the user removed
+            // it, or they edited it into an event of its own that is fetched
+            // separately.
+            if (isset($skipped[$this->key($startsAt)])) {
+                continue;
+            }
+
             $occurrences[] = [
-                'starts_at' => CarbonImmutable::instance($occurrence->getStart())->utc(),
+                'starts_at' => $startsAt,
                 'ends_at' => CarbonImmutable::instance($occurrence->getEnd())->utc(),
             ];
         }
 
         return $occurrences;
+    }
+
+    /**
+     * Occurrence starts this series should not generate, keyed for lookup.
+     *
+     * @return array<string, true>
+     */
+    private function skippedStarts(Event $event): array
+    {
+        $keys = [];
+
+        foreach ($event->excluded_dates ?? [] as $excluded) {
+            $keys[$this->key(CarbonImmutable::parse($excluded, 'UTC'))] = true;
+        }
+
+        foreach ($event->overrides as $override) {
+            if ($override->overrides_starts_at !== null) {
+                $keys[$this->key(CarbonImmutable::instance($override->overrides_starts_at))] = true;
+            }
+        }
+
+        return $keys;
+    }
+
+    private function key(CarbonInterface $at): string
+    {
+        return $at->utc()->format('Y-m-d H:i:s');
     }
 }
