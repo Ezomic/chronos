@@ -106,6 +106,10 @@ event Chronos already holds returns that event with **200** instead of creating 
 second one with **201**. Retry freely. Requests with no `source` create every
 time.
 
+Deleted events do not count as held. If the user deleted the event, the same
+request creates a new one rather than resurrecting theirs, so a retry cannot
+quietly undo a deletion.
+
 **All-day events.** Send dates. They are stored as an exclusive midnight-UTC span
 (`2026-07-20` to `2026-07-21`) with timezone `UTC`, and are treated as floating
 dates that never shift.

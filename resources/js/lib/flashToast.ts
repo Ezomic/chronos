@@ -11,6 +11,27 @@ export function initializeFlashToast(): void {
             return;
         }
 
-        toast[data.type](data.message);
+        if (!data.action) {
+            toast[data.type](data.message);
+
+            return;
+        }
+
+        const action = data.action;
+
+        toast[data.type](data.message, {
+            // Long enough to notice and reach for, since this is the only way
+            // back from a delete.
+            duration: 10000,
+            action: {
+                label: action.label,
+                onClick: () =>
+                    router.post(
+                        action.url,
+                        {},
+                        { preserveScroll: true, preserveState: false },
+                    ),
+            },
+        });
     });
 }

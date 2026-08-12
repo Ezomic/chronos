@@ -11,4 +11,5 @@ Artisan::command('inspire', function () {
 Schedule::command('calendar:sync')->everyFifteenMinutes()->withoutOverlapping();
 Schedule::command('chronos:send-reminders')->everyMinute()->withoutOverlapping();
 Schedule::command('chronos:weekly-digest')->weeklyOn(1, '07:00')->withoutOverlapping();
+Schedule::command('chronos:purge-deleted-events')->dailyAt('03:30')->withoutOverlapping();
 Schedule::command('queue:prune-failed --hours=168')->daily();
