@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 
 /**
@@ -35,6 +36,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $source_url
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property Carbon|null $deleted_at
  */
 #[Fillable([
     'calendar_id',
@@ -66,6 +68,8 @@ class Event extends Model
 
     /** @use HasFactory<EventFactory> */
     use HasFactory;
+
+    use SoftDeletes;
 
     /**
      * @return BelongsTo<Calendar, $this>

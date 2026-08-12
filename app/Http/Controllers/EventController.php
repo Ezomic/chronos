@@ -16,6 +16,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class EventController extends Controller
 {
@@ -109,21 +110,74 @@ class EventController extends Controller
             $this->excludeOccurrence($event->overriddenSeries, $event->overrides_starts_at);
             $event->delete();
 
-            return back();
+            return $this->deleted($event);
         }
 
         if ($this->targetsOneOccurrence($request, $event)) {
             $start = $this->occurrenceStart($request);
 
             // Any edit the user had made to this occurrence goes with it.
-            $event->overrides()->where('overrides_starts_at', $start)->delete();
+            $event->overrides()->where('overrides_starts_at', $start)->forceDelete();
             $this->excludeOccurrence($event, $start);
 
             return back();
         }
 
-        // The foreign key cascade takes the series' overrides with it.
+        // A soft delete does not fire the foreign key cascade, so the series'
+        // overrides have to come along by hand.
+        $event->overrides()->delete();
         $event->delete();
+
+        return $this->deleted($event);
+    }
+
+    public function restore(Event $event): RedirectResponse
+    {
+        abort_unless($this->currentUser()->can('restore', $event), 403);
+
+        $event->restore();
+        $this->restoreCascadedOverrides($event);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Event restored.')]);
+
+        return back();
+    }
+
+    /**
+     * Bring back the overrides that went down with the series, and leave the
+     * ones the user had already deleted on their own.
+     *
+     * Told apart by the exclusion list rather than by when they were deleted:
+     * deleting an override always excludes its occurrence, and two deletes a
+     * moment apart share a timestamp.
+     */
+    private function restoreCascadedOverrides(Event $series): void
+    {
+        $excluded = $series->excluded_dates ?? [];
+
+        $series->overrides()->onlyTrashed()->get()
+            ->reject(fn (Event $override): bool => in_array(
+                $override->overrides_starts_at?->utc()->format('Y-m-d H:i:s'),
+                $excluded,
+                true,
+            ))
+            ->each(fn (Event $override) => $override->restore());
+    }
+
+    /**
+     * Deleting is undoable, so say so and hand the page what it needs to offer
+     * the way back.
+     */
+    private function deleted(Event $event): RedirectResponse
+    {
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => __('Event deleted.'),
+            'action' => [
+                'label' => __('Undo'),
+                'url' => route('events.restore', $event),
+            ],
+        ]);
 
         return back();
     }
@@ -159,12 +213,15 @@ class EventController extends Controller
 
         $occurrenceStart = $this->occurrenceStart($request);
 
-        $override = Event::query()->firstOrNew([
+        // withTrashed: a deleted override still holds the unique slot for its
+        // occurrence, so reuse it rather than colliding with it.
+        $override = Event::withTrashed()->firstOrNew([
             'overrides_event_id' => $series->id,
             'overrides_starts_at' => $occurrenceStart,
         ]);
 
         $override->forceFill([
+            'deleted_at' => null,
             'calendar_id' => $calendar->id,
             'title' => $request->string('title')->toString(),
             'description' => $request->input('description'),

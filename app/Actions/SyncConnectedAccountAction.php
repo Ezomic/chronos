@@ -161,12 +161,16 @@ class SyncConnectedAccountAction
 
         // Drop mirrored events that vanished upstream, but only within the
         // synced window so events outside it are left untouched.
+        //
+        // Hard, not soft: a mirror is a copy of somebody else's calendar, so
+        // there is nothing here to undo. Soft-deleting would also leave rows
+        // that can never be cleanly mirrored again, growing every sync.
         Event::query()
             ->where('calendar_id', $calendar->id)
             ->whereNotNull('external_id')
             ->whereNotIn('external_id', $seen ?: [''])
             ->where('starts_at', '<', $to)
             ->where('ends_at', '>', $from)
-            ->delete();
+            ->forceDelete();
     }
 }
