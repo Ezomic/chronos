@@ -14,6 +14,7 @@ use App\Models\ConnectedAccount;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -38,6 +39,11 @@ class CalendarController extends Controller
                 'is_writable' => $calendar->is_writable,
                 'is_visible' => $calendar->is_visible,
                 'default_reminder_minutes' => $calendar->default_reminder_minutes ?? [],
+                // The URL itself, since it is what the user copies. It is a
+                // credential, so it is only ever shown to the owner.
+                'feed_url' => $calendar->publish_token === null
+                    ? null
+                    : route('feeds.show', ['token' => $calendar->publish_token]),
                 'provider' => $calendar->connectedAccount?->provider,
                 'account_email' => $calendar->connectedAccount?->email_address,
             ])
@@ -128,6 +134,41 @@ class CalendarController extends Controller
         ]);
 
         return back(fallback: route('calendars.edit'));
+    }
+
+    /**
+     * Start publishing, or rotate the token of a calendar already published.
+     * Rotating is how a shared URL is taken back: the old one stops working the
+     * moment the new one exists.
+     */
+    public function publish(Calendar $calendar): RedirectResponse
+    {
+        Gate::authorize('update', $calendar);
+
+        $calendar->update([
+            'publish_token' => Str::random(48),
+            'published_at' => now(),
+        ]);
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => $calendar->wasChanged('publish_token') && $calendar->published_at !== null
+                ? __('Feed link created. Anyone with it can read this calendar.')
+                : __('Feed link created.'),
+        ]);
+
+        return back();
+    }
+
+    public function unpublish(Calendar $calendar): RedirectResponse
+    {
+        Gate::authorize('update', $calendar);
+
+        $calendar->update(['publish_token' => null, 'published_at' => null]);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Feed link revoked.')]);
+
+        return back();
     }
 
     public function destroy(Calendar $calendar): RedirectResponse

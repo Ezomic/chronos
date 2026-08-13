@@ -11,6 +11,7 @@ import {
     Plus,
     RefreshCw,
     Rss,
+    Share2,
     Trash2,
     TriangleAlert,
 } from '@lucide/vue';
@@ -34,6 +35,10 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { edit as editCalendars, visibility } from '@/routes/calendars';
 import {
+    publish as publishCalendar,
+    unpublish as unpublishCalendar,
+} from '@/routes/calendars';
+import {
     destroy as disconnectAccount,
     resync as resyncAccount,
 } from '@/routes/connected-accounts';
@@ -48,6 +53,9 @@ interface ManagedCalendar {
     is_visible: boolean;
     provider: string | null;
     account_email: string | null;
+    default_reminder_minutes: number[];
+    /** The subscribe URL when published; null when it is not. */
+    feed_url: string | null;
 }
 
 interface ConnectedAccount {
@@ -112,6 +120,55 @@ function openCreate(): void {
 // Edit
 const editOpen = ref(false);
 const editing = ref<ManagedCalendar | null>(null);
+const publishOpen = ref(false);
+const publishTarget = ref<ManagedCalendar | null>(null);
+const copied = ref(false);
+
+function openPublish(calendar: ManagedCalendar): void {
+    publishTarget.value = calendar;
+    copied.value = false;
+    publishOpen.value = true;
+}
+
+function publish(): void {
+    if (!publishTarget.value) {
+        return;
+    }
+
+    router.post(
+        publishCalendar(publishTarget.value.id).url,
+        {},
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                publishOpen.value = false;
+            },
+        },
+    );
+}
+
+function unpublish(): void {
+    if (!publishTarget.value) {
+        return;
+    }
+
+    router.delete(unpublishCalendar(publishTarget.value.id).url, {
+        preserveScroll: true,
+        onSuccess: () => {
+            publishOpen.value = false;
+        },
+    });
+}
+
+async function copyFeedUrl(): Promise<void> {
+    if (!publishTarget.value?.feed_url) {
+        return;
+    }
+
+    await navigator.clipboard.writeText(publishTarget.value.feed_url);
+    copied.value = true;
+}
+
 const editName = ref('');
 const editColor = ref('');
 function openEdit(calendar: ManagedCalendar): void {
@@ -204,6 +261,21 @@ function openSubscribe(): void {
                     >
                         <Eye v-if="calendar.is_visible" class="size-4" />
                         <EyeOff v-else class="size-4 text-muted-foreground" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        :aria-label="
+                            calendar.feed_url ? 'Feed link' : 'Publish'
+                        "
+                        @click="openPublish(calendar)"
+                    >
+                        <Share2
+                            class="size-4"
+                            :class="
+                                calendar.feed_url ? '' : 'text-muted-foreground'
+                            "
+                        />
                     </Button>
                     <Button
                         variant="ghost"
@@ -619,6 +691,70 @@ function openSubscribe(): void {
                     </Button>
                 </DialogFooter>
             </Form>
+        </DialogContent>
+    </Dialog>
+    <Dialog v-model:open="publishOpen">
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>
+                    {{
+                        publishTarget?.feed_url
+                            ? 'Feed link'
+                            : 'Publish this calendar'
+                    }}
+                </DialogTitle>
+                <DialogDescription>
+                    A feed link lets a phone or another calendar app subscribe
+                    to this calendar. Anyone holding the link can read it, so
+                    treat it like a password.
+                </DialogDescription>
+            </DialogHeader>
+
+            <div v-if="publishTarget?.feed_url" class="space-y-3">
+                <div class="flex gap-2">
+                    <Input
+                        :model-value="publishTarget.feed_url"
+                        readonly
+                        class="font-mono text-xs"
+                        @focus="
+                            (e: FocusEvent) =>
+                                (e.target as HTMLInputElement).select()
+                        "
+                    />
+                    <Button
+                        type="button"
+                        variant="outline"
+                        @click="copyFeedUrl"
+                    >
+                        {{ copied ? 'Copied' : 'Copy' }}
+                    </Button>
+                </div>
+                <p class="text-xs text-muted-foreground">
+                    Creating a new link stops the old one working. Revoking
+                    stops all of them.
+                </p>
+            </div>
+
+            <DialogFooter class="gap-2">
+                <DialogClose as-child>
+                    <Button type="button" variant="outline">Close</Button>
+                </DialogClose>
+                <Button
+                    v-if="publishTarget?.feed_url"
+                    type="button"
+                    variant="destructive"
+                    @click="unpublish"
+                >
+                    Revoke
+                </Button>
+                <Button type="button" @click="publish">
+                    {{
+                        publishTarget?.feed_url
+                            ? 'Create a new link'
+                            : 'Create link'
+                    }}
+                </Button>
+            </DialogFooter>
         </DialogContent>
     </Dialog>
 </template>
