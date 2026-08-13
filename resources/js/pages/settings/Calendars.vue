@@ -42,6 +42,10 @@ import {
     destroy as disconnectAccount,
     resync as resyncAccount,
 } from '@/routes/connected-accounts';
+import {
+    preview as previewImport,
+    store as storeImport,
+} from '@/routes/imports';
 import { redirect as oauthRedirect } from '@/routes/oauth';
 
 interface ManagedCalendar {
@@ -120,6 +124,87 @@ function openCreate(): void {
 // Edit
 const editOpen = ref(false);
 const editing = ref<ManagedCalendar | null>(null);
+interface IcsPreview {
+    token: string;
+    count: number;
+    events: {
+        title: string;
+        starts_at: string | null;
+        all_day: boolean;
+        repeats: boolean;
+    }[];
+}
+
+const importPreview = ref<IcsPreview | null>(null);
+const importCalendarId = ref<number | null>(null);
+const importing = ref(false);
+const fileInput = ref<HTMLInputElement | null>(null);
+
+function chooseFile(): void {
+    fileInput.value?.click();
+}
+
+function onFileChosen(e: Event): void {
+    const file = (e.target as HTMLInputElement).files?.[0];
+
+    if (!file) {
+        return;
+    }
+
+    importing.value = true;
+
+    router.post(
+        previewImport().url,
+        { file },
+        {
+            preserveScroll: true,
+            forceFormData: true,
+            onSuccess: (page) => {
+                const flash = (page.props.flash ?? {}) as {
+                    icsImport?: IcsPreview;
+                };
+                importPreview.value = flash.icsImport ?? null;
+                importCalendarId.value =
+                    myCalendars.value.find((c) => c.is_default)?.id ??
+                    myCalendars.value[0]?.id ??
+                    null;
+            },
+            onFinish: () => {
+                importing.value = false;
+
+                if (fileInput.value) {
+                    fileInput.value.value = '';
+                }
+            },
+        },
+    );
+}
+
+function confirmImport(): void {
+    if (!importPreview.value || importCalendarId.value === null) {
+        return;
+    }
+
+    importing.value = true;
+
+    router.post(
+        storeImport().url,
+        {
+            token: importPreview.value.token,
+            calendar_id: importCalendarId.value,
+        },
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                importPreview.value = null;
+            },
+            onFinish: () => {
+                importing.value = false;
+            },
+        },
+    );
+}
+
 const publishOpen = ref(false);
 const publishTarget = ref<ManagedCalendar | null>(null);
 const copied = ref(false);
@@ -693,6 +778,103 @@ function openSubscribe(): void {
             </Form>
         </DialogContent>
     </Dialog>
+    <div class="mt-10 flex flex-col space-y-4">
+        <Heading
+            variant="small"
+            title="Import a calendar file"
+            description="Add the events from an .ics file, such as an invite attached to an email"
+        />
+
+        <input
+            ref="fileInput"
+            type="file"
+            accept=".ics,.ical,text/calendar"
+            class="hidden"
+            @change="onFileChosen"
+        />
+
+        <div v-if="!importPreview">
+            <Button
+                type="button"
+                variant="outline"
+                :disabled="importing"
+                @click="chooseFile"
+            >
+                {{ importing ? 'Reading...' : 'Choose a file' }}
+            </Button>
+        </div>
+
+        <div v-else class="space-y-3 rounded-lg border p-4">
+            <p class="text-sm font-medium">
+                {{ importPreview.count }} event(s) in this file
+            </p>
+
+            <ul class="space-y-1 text-sm text-muted-foreground">
+                <li
+                    v-for="(event, index) in importPreview.events"
+                    :key="index"
+                    class="truncate"
+                >
+                    {{ event.title }}
+                    <span v-if="event.starts_at" class="opacity-70">
+                        &mdash;
+                        {{ new Date(event.starts_at).toLocaleDateString() }}
+                    </span>
+                    <span v-if="event.repeats" class="opacity-70"
+                        >(repeats)</span
+                    >
+                </li>
+            </ul>
+
+            <p
+                v-if="importPreview.count > importPreview.events.length"
+                class="text-xs text-muted-foreground"
+            >
+                Showing the first {{ importPreview.events.length }}. All
+                {{ importPreview.count }} will be imported.
+            </p>
+
+            <div class="grid gap-2">
+                <Label for="import-calendar">Import into</Label>
+                <select
+                    id="import-calendar"
+                    v-model="importCalendarId"
+                    class="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs"
+                >
+                    <option
+                        v-for="calendar in myCalendars"
+                        :key="calendar.id"
+                        :value="calendar.id"
+                    >
+                        {{ calendar.name }}
+                    </option>
+                </select>
+            </div>
+
+            <div class="flex gap-2">
+                <Button
+                    type="button"
+                    :disabled="importing || importCalendarId === null"
+                    @click="confirmImport"
+                >
+                    {{ importing ? 'Importing...' : 'Import' }}
+                </Button>
+                <Button
+                    type="button"
+                    variant="outline"
+                    @click="importPreview = null"
+                >
+                    Cancel
+                </Button>
+            </div>
+
+            <p class="text-xs text-muted-foreground">
+                Events already imported from this file are skipped rather than
+                added twice.
+            </p>
+        </div>
+    </div>
+
     <Dialog v-model:open="publishOpen">
         <DialogContent>
             <DialogHeader>

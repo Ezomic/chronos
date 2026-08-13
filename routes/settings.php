@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\CalendarOAuthController;
 use App\Http\Controllers\Settings\CalendarController;
 use App\Http\Controllers\Settings\ConnectedAccountController;
 use App\Http\Controllers\Settings\EventTemplateController;
+use App\Http\Controllers\Settings\IcsImportController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\PushSubscriptionController;
 use App\Http\Controllers\Settings\SecurityController;
@@ -31,6 +32,9 @@ Route::middleware(['auth'])->group(function () {
 
     Route::post('settings/push-subscriptions', [PushSubscriptionController::class, 'store'])->name('push-subscriptions.store');
     Route::delete('settings/push-subscriptions/{pushSubscription}', [PushSubscriptionController::class, 'destroy'])->name('push-subscriptions.destroy');
+
+    Route::post('settings/imports/preview', [IcsImportController::class, 'preview'])->name('imports.preview');
+    Route::post('settings/imports', [IcsImportController::class, 'store'])->name('imports.store');
 
     Route::post('settings/subscriptions', [ConnectedAccountController::class, 'storeSubscription'])->name('subscriptions.store');
     Route::post('settings/connected-accounts/{account}/resync', [ConnectedAccountController::class, 'resync'])->name('connected-accounts.resync');
