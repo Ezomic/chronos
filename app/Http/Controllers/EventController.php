@@ -12,6 +12,7 @@ use App\Http\Requests\StoreEventRequest;
 use App\Http\Requests\UpdateEventRequest;
 use App\Models\Calendar;
 use App\Models\Event;
+use App\Services\Calendar\ClashDetector;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Foundation\Http\FormRequest;
@@ -43,7 +44,7 @@ class EventController extends Controller
             $request->string('ends_at')->toString(),
         );
 
-        $action->handle(
+        $event = $action->handle(
             calendar: $calendar,
             title: $request->string('title')->toString(),
             startsAt: $startsAt,
@@ -56,6 +57,8 @@ class EventController extends Controller
             reminderMinutes: $this->reminderMinutes($request),
         );
 
+        $this->warnAboutClashes($event);
+
         return back();
     }
 
@@ -66,7 +69,7 @@ class EventController extends Controller
         $calendar = Calendar::findOrFail($request->integer('calendar_id'));
 
         if ($this->targetsOneOccurrence($request, $event)) {
-            $this->writeOverride($request, $event, $calendar);
+            $this->warnAboutClashes($this->writeOverride($request, $event, $calendar));
 
             return back();
         }
@@ -98,6 +101,8 @@ class EventController extends Controller
             'reminder_minutes' => $reminderMinutes,
             'reminder_sent_at' => $reminderChanged ? null : $event->reminder_sent_at,
         ])->save();
+
+        $this->warnAboutClashes($event);
 
         return back();
     }
@@ -167,6 +172,27 @@ class EventController extends Controller
     }
 
     /**
+     * Say what a saved event collides with, if anything. A warning and never a
+     * refusal: double-booking is often deliberate, and blocking the save would
+     * be worse than saying nothing.
+     */
+    private function warnAboutClashes(Event $event): void
+    {
+        $clashes = app(ClashDetector::class)->for($event->fresh() ?? $event);
+
+        if ($clashes === []) {
+            return;
+        }
+
+        Inertia::flash('toast', [
+            'type' => 'warning',
+            'message' => __('Saved, but it overlaps :events.', [
+                'events' => implode(', ', $clashes),
+            ]),
+        ]);
+    }
+
+    /**
      * Deleting is undoable, so say so and hand the page what it needs to offer
      * the way back.
      */
@@ -204,7 +230,7 @@ class EventController extends Controller
      * Store this occurrence as an event of its own. The series keeps its rule
      * and stops generating that one, so the two never both appear.
      */
-    private function writeOverride(UpdateEventRequest $request, Event $series, Calendar $calendar): void
+    private function writeOverride(UpdateEventRequest $request, Event $series, Calendar $calendar): Event
     {
         [$startsAt, $endsAt, $timezone] = $this->resolveEventTimes(
             $request->boolean('all_day'),
@@ -239,6 +265,8 @@ class EventController extends Controller
             'reminder_minutes' => $this->reminderMinutes($request),
             'reminder_sent_at' => null,
         ])->save();
+
+        return $override;
     }
 
     private function excludeOccurrence(?Event $series, ?CarbonInterface $startsAt): void
