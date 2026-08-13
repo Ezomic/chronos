@@ -113,7 +113,7 @@ it('leaves untouched fields alone on a partial update', function () {
 it('re-arms a spent reminder when the times move', function () {
     $user = zeroUser();
     $event = zeroEvent($user);
-    $event->forceFill(['reminder_minutes' => 15, 'reminder_sent_at' => now()])->save();
+    $event->reminders()->create(['minutes_before' => 15, 'sent_at' => now()]);
 
     $this->withToken(actingWithToken($user, ['events:manage', 'app:zero']));
 
@@ -122,7 +122,7 @@ it('re-arms a spent reminder when the times move', function () {
         'ends_at' => '2026-07-21T11:45:00+02:00',
     ])->assertOk();
 
-    expect($event->fresh()->reminder_sent_at)->toBeNull();
+    expect($event->fresh()->reminders->first()->sent_at)->toBeNull();
 });
 
 it('deletes an event it created', function () {

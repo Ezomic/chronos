@@ -84,7 +84,7 @@ function reschedule({
             ends_at: end,
             frequency: 'none',
             until: null,
-            reminder_minutes: event.reminder_minutes,
+            reminders: event.reminders,
         },
         { preserveScroll: true },
     );

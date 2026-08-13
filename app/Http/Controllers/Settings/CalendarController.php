@@ -37,6 +37,7 @@ class CalendarController extends Controller
                 'is_default' => $calendar->is_default,
                 'is_writable' => $calendar->is_writable,
                 'is_visible' => $calendar->is_visible,
+                'default_reminder_minutes' => $calendar->default_reminder_minutes ?? [],
                 'provider' => $calendar->connectedAccount?->provider,
                 'account_email' => $calendar->connectedAccount?->email_address,
             ])
@@ -91,9 +92,31 @@ class CalendarController extends Controller
         $calendar->update([
             'name' => $request->string('name')->toString(),
             'color' => $request->string('color')->toString(),
+            'default_reminder_minutes' => $request->has('default_reminder_minutes')
+                ? $this->reminderMinutes($request)
+                : $calendar->default_reminder_minutes,
         ]);
 
         return back()->with('status', 'Calendar updated.');
+    }
+
+    /**
+     * The default reminder set a request asks for. Form input arrives as
+     * strings; anything that is not a number is not a reminder.
+     *
+     * @return array<int, int>
+     */
+    private function reminderMinutes(Request $request): array
+    {
+        $minutes = [];
+
+        foreach ((array) $request->input('default_reminder_minutes', []) as $value) {
+            if (is_numeric($value)) {
+                $minutes[] = (int) $value;
+            }
+        }
+
+        return array_values(array_unique($minutes));
     }
 
     public function visibility(Request $request, Calendar $calendar): RedirectResponse

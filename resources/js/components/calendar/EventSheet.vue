@@ -77,7 +77,7 @@ interface FormState {
     start: string;
     end: string;
     recurrence: RecurrenceForm;
-    reminder: string;
+    reminders: number[];
 }
 
 const form = reactive<FormState>({
@@ -89,7 +89,7 @@ const form = reactive<FormState>({
     start: '',
     end: '',
     recurrence: emptyRecurrence(),
-    reminder: 'none',
+    reminders: [],
 });
 
 const errors = ref<Record<string, string>>({});
@@ -190,10 +190,7 @@ function hydrate(): void {
         form.all_day = e.all_day;
 
         form.recurrence = parseRrule(e.rrule);
-        form.reminder =
-            e.reminder_minutes === null || e.reminder_minutes === undefined
-                ? 'none'
-                : String(e.reminder_minutes);
+        form.reminders = [...e.reminders];
 
         applyScopeDates();
 
@@ -211,7 +208,7 @@ function hydrate(): void {
     form.start = props.defaultStart ?? `${date}T09:00`;
     form.end = props.defaultEnd ?? `${date}T10:00`;
     form.recurrence = emptyRecurrence();
-    form.reminder = 'none';
+    form.reminders = [];
 }
 
 watch(
@@ -235,7 +232,7 @@ watch(
             form.start = form.start.slice(0, 10);
             form.end = form.end.slice(0, 10);
             // Reminders are only offered for timed events.
-            form.reminder = 'none';
+            form.reminders = [];
         } else {
             if (form.start.length === 10) {
                 form.start += 'T09:00';
@@ -299,8 +296,7 @@ function payload() {
         starts_at: form.start,
         ends_at: form.end,
         ...recurrencePayload(),
-        reminder_minutes:
-            form.reminder === 'none' ? null : Number(form.reminder),
+        reminders: form.reminders,
         ...occurrenceScope(),
     };
 }
@@ -329,6 +325,17 @@ function recurrencePayload(): Record<string, unknown> {
         until: r.ends === 'until' ? r.until || null : null,
         count: r.ends === 'count' ? r.count : null,
     };
+}
+
+// "No reminder" is the empty set now, so the option is dropped from the list.
+const reminderChoices = computed(() =>
+    reminderOptions.filter((option) => option.value !== 'none'),
+);
+
+function toggleReminder(minutes: number): void {
+    form.reminders = form.reminders.includes(minutes)
+        ? form.reminders.filter((m) => m !== minutes)
+        : [...form.reminders, minutes].sort((a, b) => a - b);
 }
 
 function toggleWeekday(day: string): void {
@@ -380,10 +387,8 @@ function applyTemplate(template: EventTemplate): void {
         frequency:
             (template.frequency as RecurrenceForm['frequency']) ?? 'none',
     };
-    form.reminder =
-        template.reminder_minutes === null
-            ? 'none'
-            : String(template.reminder_minutes);
+    form.reminders =
+        template.reminder_minutes === null ? [] : [template.reminder_minutes];
 
     if (template.all_day) {
         // duration is whole days; the end input is the inclusive last day.
@@ -439,8 +444,7 @@ function templatePayload() {
             form.recurrence.frequency === 'none'
                 ? null
                 : form.recurrence.frequency,
-        reminder_minutes:
-            form.reminder === 'none' ? null : Number(form.reminder),
+        reminder_minutes: form.reminders[0] ?? null,
     };
 }
 
@@ -859,20 +863,33 @@ function remove(): void {
                 </div>
 
                 <div v-if="!form.all_day" class="grid gap-2">
-                    <Label for="reminder">Reminder</Label>
-                    <select
-                        id="reminder"
-                        v-model="form.reminder"
-                        class="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs"
-                    >
-                        <option
-                            v-for="option in reminderOptions"
+                    <Label>Reminders</Label>
+                    <div class="flex flex-wrap gap-1">
+                        <button
+                            v-for="option in reminderChoices"
                             :key="option.value"
-                            :value="option.value"
+                            type="button"
+                            class="h-8 rounded-md border px-2 text-xs"
+                            :class="
+                                form.reminders.includes(Number(option.value))
+                                    ? 'border-primary bg-primary text-primary-foreground'
+                                    : 'border-input'
+                            "
+                            @click="toggleReminder(Number(option.value))"
                         >
                             {{ option.label }}
-                        </option>
-                    </select>
+                        </button>
+                    </div>
+                    <p class="text-xs text-muted-foreground">
+                        {{
+                            form.reminders.length === 0
+                                ? 'No reminder.'
+                                : 'Each fires at its own time.'
+                        }}
+                    </p>
+                    <p v-if="errors.reminders" class="text-sm text-destructive">
+                        {{ errors.reminders }}
+                    </p>
                 </div>
 
                 <div class="grid gap-2">

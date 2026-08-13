@@ -72,7 +72,7 @@ class CalendarController extends Controller
             ->where('starts_at', '<', $to)
             ->where('ends_at', '>', $from)
             ->when($search !== '', $searchScope)
-            ->with('calendar:id,name,color,is_writable')
+            ->with(['calendar:id,name,color,is_writable', 'reminders'])
             ->get();
 
         // Recurring masters whose series could produce an occurrence in the
@@ -82,7 +82,7 @@ class CalendarController extends Controller
             ->whereNotNull('rrule')
             ->where('starts_at', '<', $to)
             ->when($search !== '', $searchScope)
-            ->with(['calendar:id,name,color,is_writable', 'overrides'])
+            ->with(['calendar:id,name,color,is_writable', 'overrides', 'reminders'])
             ->get();
 
         $events = collect();
@@ -154,7 +154,7 @@ class CalendarController extends Controller
             'source_app' => $event->source_app,
             'source_url' => $event->source_url,
             'rrule' => $event->rrule,
-            'reminder_minutes' => $event->reminder_minutes,
+            'reminders' => $event->reminders->pluck('minutes_before')->sort()->values()->all(),
             // The series anchor (for editing the whole series), null when single.
             'series_starts_at' => $event->rrule ? $event->starts_at->toIso8601String() : null,
             'series_ends_at' => $event->rrule ? $event->ends_at->toIso8601String() : null,

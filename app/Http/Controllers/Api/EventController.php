@@ -155,6 +155,7 @@ class EventController extends Controller
         $this->authorizeManaging($event);
 
         $attributes = [];
+        $moved = false;
 
         foreach (['title', 'description', 'location'] as $field) {
             if ($request->has($field)) {
@@ -177,14 +178,17 @@ class EventController extends Controller
             $attributes['all_day'] = $allDay;
             $attributes['timezone'] = $timezone;
 
-            // A moved event has to remind again rather than stay silent on a
-            // stamp from where it used to be.
-            $attributes['reminder_sent_at'] = null;
-            $attributes['reminder_sent_for'] = null;
+            $moved = true;
         }
 
         if ($attributes !== []) {
             $event->forceFill($attributes)->save();
+        }
+
+        // A moved event has to remind again rather than stay silent on a stamp
+        // from where it used to be.
+        if ($moved) {
+            $event->reminders()->update(['sent_at' => null, 'sent_for' => null]);
         }
 
         return $this->respond($event->refresh(), 200);

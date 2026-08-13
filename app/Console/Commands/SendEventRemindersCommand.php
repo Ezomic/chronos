@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Models\Event;
+use App\Models\EventReminder;
 use App\Notifications\EventReminderNotification;
 use App\Services\Calendar\RecurrenceExpander;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Builder;
 
 class SendEventRemindersCommand extends Command
 {
@@ -25,7 +27,7 @@ class SendEventRemindersCommand extends Command
     {
         $now = CarbonImmutable::now();
 
-        // A reminder is due once starts_at - reminder_minutes has passed, which
+        // A reminder is due once starts_at - minutes_before has passed, which
         // means the (occurrence) start falls between now and now + the largest
         // offset. Scope queries to that window, then confirm each in PHP.
         $horizon = $now->addMinutes(max(Event::REMINDER_CHOICES));
@@ -40,32 +42,28 @@ class SendEventRemindersCommand extends Command
 
     private function remindSingleEvents(CarbonImmutable $now, CarbonImmutable $horizon): int
     {
-        $events = Event::query()
+        $reminders = $this->reminders(fn (Builder $query) => $query
             ->whereNull('rrule')
-            ->whereNull('reminder_sent_at')
-            ->whereNotNull('reminder_minutes')
             ->where('starts_at', '>=', $now)
-            ->where('starts_at', '<=', $horizon)
-            ->with('calendar.user')
-            ->get();
+            ->where('starts_at', '<=', $horizon))
+            ->whereNull('sent_at');
 
         $sent = 0;
 
-        foreach ($events as $event) {
-            $reminderAt = $event->starts_at->subMinutes((int) $event->reminder_minutes);
+        foreach ($reminders->get() as $reminder) {
+            $event = $reminder->event;
+            $user = $event?->calendar?->user;
 
-            if ($reminderAt->greaterThan($now)) {
+            if ($event === null || $user === null) {
                 continue;
             }
 
-            $user = $event->calendar?->user;
-
-            if ($user === null) {
+            if ($event->starts_at->subMinutes($reminder->minutes_before)->greaterThan($now)) {
                 continue;
             }
 
             $user->notify(new EventReminderNotification($event));
-            $event->forceFill(['reminder_sent_at' => $now])->save();
+            $reminder->forceFill(['sent_at' => $now])->save();
             $sent++;
         }
 
@@ -73,40 +71,34 @@ class SendEventRemindersCommand extends Command
     }
 
     /**
-     * Send a reminder for the next occurrence of each recurring event whose
-     * reminder time has arrived. reminder_sent_for tracks the last occurrence
-     * reminded, so each occurrence fires at most once.
+     * Send the next due occurrence for each reminder on a repeating event.
+     * sent_for tracks the last occurrence that reminder covered, so each
+     * occurrence fires once per reminder rather than once per event.
      */
     private function remindRecurringEvents(CarbonImmutable $now, CarbonImmutable $horizon): int
     {
-        $events = Event::query()
-            ->whereNotNull('rrule')
-            ->whereNotNull('reminder_minutes')
-            ->with(['calendar.user', 'overrides'])
-            ->get();
-
         $sent = 0;
 
-        foreach ($events as $event) {
-            $user = $event->calendar?->user;
+        foreach ($this->reminders(fn (Builder $query) => $query->whereNotNull('rrule'))->get() as $reminder) {
+            $event = $reminder->event;
+            $user = $event?->calendar?->user;
 
-            if ($user === null) {
+            if ($event === null || $user === null) {
                 continue;
             }
 
             foreach ($this->expander->expand($event, $now, $horizon) as $occurrence) {
                 $start = $occurrence['starts_at'];
-                $reminderAt = $start->subMinutes((int) $event->reminder_minutes);
 
-                $alreadySent = $event->reminder_sent_for !== null
-                    && $start->lessThanOrEqualTo($event->reminder_sent_for);
+                $alreadySent = $reminder->sent_for !== null
+                    && $start->lessThanOrEqualTo($reminder->sent_for);
 
-                if ($reminderAt->greaterThan($now) || $alreadySent) {
+                if ($start->subMinutes($reminder->minutes_before)->greaterThan($now) || $alreadySent) {
                     continue;
                 }
 
                 $user->notify(new EventReminderNotification($event, $start));
-                $event->forceFill(['reminder_sent_for' => $start])->save();
+                $reminder->forceFill(['sent_for' => $start])->save();
                 $sent++;
 
                 // Only the earliest due occurrence per run; the next run picks
@@ -116,5 +108,16 @@ class SendEventRemindersCommand extends Command
         }
 
         return $sent;
+    }
+
+    /**
+     * @param  \Closure(Builder<Event>): Builder<Event>  $scope
+     * @return Builder<EventReminder>
+     */
+    private function reminders(\Closure $scope): Builder
+    {
+        return EventReminder::query()
+            ->whereHas('event', $scope)
+            ->with(['event.calendar.user', 'event.overrides']);
     }
 }
