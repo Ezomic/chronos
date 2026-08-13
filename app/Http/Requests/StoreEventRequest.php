@@ -35,7 +35,8 @@ class StoreEventRequest extends FormRequest
             'starts_at' => ['required', 'date'],
             'ends_at' => ['required', 'date', $this->boolean('all_day') ? 'after_or_equal:starts_at' : 'after:starts_at'],
             ...$this->recurrenceRules(),
-            'reminder_minutes' => ['nullable', 'integer', Rule::in(Event::REMINDER_CHOICES)],
+            'reminders' => ['sometimes', 'array', 'max:5'],
+            'reminders.*' => ['integer', Rule::in(Event::REMINDER_CHOICES)],
         ];
     }
 }

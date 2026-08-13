@@ -25,9 +25,6 @@ use Illuminate\Support\Carbon;
  * @property int|null $overrides_event_id
  * @property Carbon|null $overrides_starts_at
  * @property array<int, string>|null $excluded_dates
- * @property int|null $reminder_minutes
- * @property Carbon|null $reminder_sent_at
- * @property Carbon|null $reminder_sent_for
  * @property string|null $external_id
  * @property string|null $external_etag
  * @property string|null $source_app
@@ -51,9 +48,6 @@ use Illuminate\Support\Carbon;
     'overrides_event_id',
     'overrides_starts_at',
     'excluded_dates',
-    'reminder_minutes',
-    'reminder_sent_at',
-    'reminder_sent_for',
     'external_id',
     'external_etag',
     'source_app',
@@ -90,6 +84,14 @@ class Event extends Model
     }
 
     /**
+     * @return HasMany<EventReminder, $this>
+     */
+    public function reminders(): HasMany
+    {
+        return $this->hasMany(EventReminder::class);
+    }
+
+    /**
      * Occurrences of this series that were edited into events of their own.
      *
      * @return HasMany<Event, $this>
@@ -110,9 +112,6 @@ class Event extends Model
             'all_day' => 'boolean',
             'overrides_starts_at' => 'datetime',
             'excluded_dates' => 'array',
-            'reminder_minutes' => 'integer',
-            'reminder_sent_at' => 'datetime',
-            'reminder_sent_for' => 'datetime',
         ];
     }
 }

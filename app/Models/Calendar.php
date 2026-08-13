@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property bool $is_default
  * @property bool $is_visible
  * @property bool $is_writable
+ * @property array<int, int>|null $default_reminder_minutes
  * @property Carbon|null $synced_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -35,6 +36,7 @@ use Illuminate\Support\Carbon;
     'is_default',
     'is_visible',
     'is_writable',
+    'default_reminder_minutes',
     'synced_at',
 ])]
 class Calendar extends Model
@@ -81,6 +83,7 @@ class Calendar extends Model
             'is_default' => 'boolean',
             'is_visible' => 'boolean',
             'is_writable' => 'boolean',
+            'default_reminder_minutes' => 'array',
             'synced_at' => 'datetime',
         ];
     }

@@ -54,7 +54,7 @@ class EventController extends Controller
             description: $request->string('description')->toString() ?: null,
             location: $request->string('location')->toString() ?: null,
             rrule: $this->buildRrule($request, $timezone, $startsAt),
-            reminderMinutes: $this->reminderMinutes($request),
+            reminderMinutes: $this->requestedReminders($request),
         );
 
         $this->warnAboutClashes($event);
@@ -81,12 +81,8 @@ class EventController extends Controller
             $request->string('ends_at')->toString(),
         );
 
-        $reminderMinutes = $this->reminderMinutes($request);
-
-        // Re-arm a spent reminder when its timing changes, so an edited event
-        // reminds again instead of staying silent from a stale sent stamp.
-        $reminderChanged = $reminderMinutes !== $event->reminder_minutes
-            || ! $startsAt->equalTo($event->starts_at);
+        $reminders = $this->requestedReminders($request);
+        $moved = ! $startsAt->equalTo($event->starts_at);
 
         $event->forceFill([
             'calendar_id' => $calendar->id,
@@ -98,9 +94,15 @@ class EventController extends Controller
             'all_day' => $request->boolean('all_day'),
             'timezone' => $timezone,
             'rrule' => $this->buildRrule($request, $timezone, $startsAt),
-            'reminder_minutes' => $reminderMinutes,
-            'reminder_sent_at' => $reminderChanged ? null : $event->reminder_sent_at,
         ])->save();
+
+        $this->syncReminders($event, $reminders);
+
+        // A moved event has to remind again rather than stay silent on a stamp
+        // from where it used to be.
+        if ($moved) {
+            $event->reminders()->update(['sent_at' => null, 'sent_for' => null]);
+        }
 
         $this->warnAboutClashes($event);
 
@@ -262,9 +264,10 @@ class EventController extends Controller
             'rrule' => null,
             'overrides_event_id' => $series->id,
             'overrides_starts_at' => $occurrenceStart,
-            'reminder_minutes' => $this->reminderMinutes($request),
-            'reminder_sent_at' => null,
         ])->save();
+
+        $this->syncReminders($override, $this->requestedReminders($request) ?? []);
+        $override->reminders()->update(['sent_at' => null, 'sent_for' => null]);
 
         return $override;
     }
@@ -281,11 +284,50 @@ class EventController extends Controller
         $series->forceFill(['excluded_dates' => array_values(array_unique($excluded))])->save();
     }
 
-    private function reminderMinutes(FormRequest $request): ?int
+    /**
+     * The reminders a request asks for. Null when it did not say, which on a
+     * new event means inherit the calendar's defaults.
+     *
+     * @return array<int, int>|null
+     */
+    private function requestedReminders(FormRequest $request): ?array
     {
-        return $request->filled('reminder_minutes')
-            ? $request->integer('reminder_minutes')
-            : null;
+        if (! $request->has('reminders')) {
+            return null;
+        }
+
+        $minutes = [];
+
+        foreach ((array) $request->input('reminders', []) as $value) {
+            // Form input arrives as strings; anything else is not a reminder.
+            if (is_numeric($value)) {
+                $minutes[] = (int) $value;
+            }
+        }
+
+        return array_values(array_unique($minutes));
+    }
+
+    /**
+     * Replace an event's reminders with the requested set, keeping the delivery
+     * state of any that survive so a saved event does not remind twice.
+     *
+     * @param  array<int, int>|null  $requested
+     */
+    private function syncReminders(Event $event, ?array $requested): void
+    {
+        if ($requested === null) {
+            return;
+        }
+
+        $event->reminders()->whereNotIn('minutes_before', $requested ?: [-1])->delete();
+
+        /** @var array<int, int> $existing */
+        $existing = $event->reminders()->pluck('minutes_before')->all();
+
+        foreach (array_diff($requested, $existing) as $minutes) {
+            $event->reminders()->create(['minutes_before' => $minutes]);
+        }
     }
 
     /**

@@ -248,14 +248,15 @@ it('does not remind for a skipped occurrence', function () {
         'ends_at' => $start->addMinutes(15),
         'timezone' => 'UTC',
         'rrule' => 'FREQ=DAILY',
-        'reminder_minutes' => 15,
         'excluded_dates' => [$start->utc()->format('Y-m-d H:i:s')],
     ]);
+
+    $series->reminders()->create(['minutes_before' => 15]);
 
     $this->artisan('chronos:send-reminders')->assertSuccessful();
 
     Notification::assertNothingSent();
-    expect($series->fresh()->reminder_sent_for)->toBeNull();
+    expect($series->fresh()->reminders->first()->sent_for)->toBeNull();
 });
 
 it('reminds an overridden occurrence on its own time', function () {
@@ -271,8 +272,9 @@ it('reminds an overridden occurrence on its own time', function () {
         'ends_at' => $original->addMinutes(15),
         'timezone' => 'UTC',
         'rrule' => 'FREQ=DAILY',
-        'reminder_minutes' => 15,
     ]);
+
+    $series->reminders()->create(['minutes_before' => 15]);
 
     // Moved five minutes earlier, so its own reminder is due now.
     Event::factory()->for($calendar)->create([
@@ -282,12 +284,11 @@ it('reminds an overridden occurrence on its own time', function () {
         'rrule' => null,
         'overrides_event_id' => $series->id,
         'overrides_starts_at' => $original,
-        'reminder_minutes' => 15,
-    ]);
+    ])->reminders()->create(['minutes_before' => 15]);
 
     $this->artisan('chronos:send-reminders')->assertSuccessful();
 
     // Once, for the override, not for the occurrence it replaced.
     Notification::assertSentToTimes($user, EventReminderNotification::class, 1);
-    expect($series->fresh()->reminder_sent_for)->toBeNull();
+    expect($series->fresh()->reminders->first()->sent_for)->toBeNull();
 });

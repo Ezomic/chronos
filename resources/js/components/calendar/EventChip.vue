@@ -45,7 +45,7 @@ const style = computed(() => {
         <Mail v-if="fromMail && source" class="size-3 shrink-0 opacity-70" />
         <Repeat v-if="event.rrule" class="size-3 shrink-0 opacity-70" />
         <Bell
-            v-if="event.reminder_minutes !== null"
+            v-if="event.reminders.length > 0"
             class="size-3 shrink-0 opacity-70"
         />
         <span class="truncate">{{ event.title }}</span>
