@@ -21,6 +21,8 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('settings/calendars/{calendar}', [CalendarController::class, 'update'])->name('calendars.update');
     Route::patch('settings/calendars/{calendar}/visibility', [CalendarController::class, 'visibility'])->name('calendars.visibility');
     Route::delete('settings/calendars/{calendar}', [CalendarController::class, 'destroy'])->name('calendars.destroy');
+    Route::post('settings/calendars/{calendar}/publish', [CalendarController::class, 'publish'])->name('calendars.publish');
+    Route::delete('settings/calendars/{calendar}/publish', [CalendarController::class, 'unpublish'])->name('calendars.unpublish');
 
     Route::get('settings/templates', [EventTemplateController::class, 'edit'])->name('event-templates.edit');
     Route::post('settings/templates', [EventTemplateController::class, 'store'])->name('event-templates.store');

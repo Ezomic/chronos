@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Database\Factories\CalendarFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -22,6 +23,8 @@ use Illuminate\Support\Carbon;
  * @property bool $is_visible
  * @property bool $is_writable
  * @property array<int, int>|null $default_reminder_minutes
+ * @property string|null $publish_token
+ * @property Carbon|null $published_at
  * @property Carbon|null $synced_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -37,8 +40,11 @@ use Illuminate\Support\Carbon;
     'is_visible',
     'is_writable',
     'default_reminder_minutes',
+    'publish_token',
+    'published_at',
     'synced_at',
 ])]
+#[Hidden(['publish_token'])]
 class Calendar extends Model
 {
     /** Distinguishing colors auto-assigned to new calendars. */
@@ -84,6 +90,7 @@ class Calendar extends Model
             'is_visible' => 'boolean',
             'is_writable' => 'boolean',
             'default_reminder_minutes' => 'array',
+            'published_at' => 'datetime',
             'synced_at' => 'datetime',
         ];
     }
