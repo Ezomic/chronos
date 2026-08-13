@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Actions\CreateEventAction;
 use App\Concerns\InteractsWithCurrentUser;
 use App\Concerns\ResolvesEventTimes;
+use App\Concerns\ValidatesRecurrence;
 use App\Http\Requests\StoreEventRequest;
 use App\Http\Requests\UpdateEventRequest;
 use App\Models\Calendar;
@@ -22,6 +23,7 @@ class EventController extends Controller
 {
     use InteractsWithCurrentUser;
     use ResolvesEventTimes;
+    use ValidatesRecurrence;
 
     private const FREQUENCIES = [
         'daily' => 'DAILY',
@@ -50,7 +52,7 @@ class EventController extends Controller
             timezone: $timezone,
             description: $request->string('description')->toString() ?: null,
             location: $request->string('location')->toString() ?: null,
-            rrule: $this->buildRrule($request, $timezone),
+            rrule: $this->buildRrule($request, $timezone, $startsAt),
             reminderMinutes: $this->reminderMinutes($request),
         );
 
@@ -92,7 +94,7 @@ class EventController extends Controller
             'ends_at' => $endsAt,
             'all_day' => $request->boolean('all_day'),
             'timezone' => $timezone,
-            'rrule' => $this->buildRrule($request, $timezone),
+            'rrule' => $this->buildRrule($request, $timezone, $startsAt),
             'reminder_minutes' => $reminderMinutes,
             'reminder_sent_at' => $reminderChanged ? null : $event->reminder_sent_at,
         ])->save();
@@ -263,7 +265,7 @@ class EventController extends Controller
      * the event doesn't repeat. UNTIL is stored as an inclusive end-of-day UTC
      * timestamp.
      */
-    private function buildRrule(FormRequest $request, string $timezone): ?string
+    private function buildRrule(FormRequest $request, string $timezone, CarbonImmutable $startsAt): ?string
     {
         $frequency = $request->string('frequency')->toString();
 
@@ -271,17 +273,80 @@ class EventController extends Controller
             return null;
         }
 
-        $rrule = 'FREQ='.self::FREQUENCIES[$frequency];
+        $parts = ['FREQ='.self::FREQUENCIES[$frequency]];
 
-        if ($request->filled('until')) {
-            $until = CarbonImmutable::parse($request->string('until')->toString(), $timezone)
-                ->endOfDay()
-                ->utc()
-                ->format('Ymd\THis\Z');
+        $interval = $request->integer('interval');
 
-            $rrule .= ';UNTIL='.$until;
+        if ($interval > 1) {
+            $parts[] = 'INTERVAL='.$interval;
         }
 
-        return $rrule;
+        $byDay = $this->byDay($request, $frequency, $timezone, $startsAt);
+
+        if ($byDay !== null) {
+            $parts[] = 'BYDAY='.$byDay;
+        }
+
+        $ending = $this->rruleEnding($request, $timezone);
+
+        if ($ending !== null) {
+            $parts[] = $ending;
+        }
+
+        return implode(';', $parts);
+    }
+
+    /**
+     * The weekday part: which days a weekly rule falls on, or which weekday
+     * position a monthly rule repeats at.
+     */
+    private function byDay(FormRequest $request, string $frequency, string $timezone, CarbonImmutable $startsAt): ?string
+    {
+        if ($frequency === 'weekly') {
+            $days = array_values(array_filter(
+                (array) $request->input('byday', []),
+                fn (mixed $day): bool => is_string($day) && in_array($day, self::WEEKDAYS, true),
+            ));
+
+            return $days === [] ? null : implode(',', $days);
+        }
+
+        if ($frequency !== 'monthly' || $request->string('monthly_mode')->toString() !== 'weekday') {
+            return null;
+        }
+
+        // Read the position off the event's own start, in its own zone: "the
+        // second Tuesday" is a fact about the date the user picked.
+        $local = $startsAt->setTimezone($timezone);
+        $position = (int) ceil($local->day / 7);
+
+        // A fifth weekday does not happen every month, and someone choosing it
+        // means the last one.
+        return ($position >= 5 ? -1 : $position).self::WEEKDAYS[$local->dayOfWeek];
+    }
+
+    /**
+     * How the series stops: after a number of occurrences, on a date, or never.
+     */
+    private function rruleEnding(FormRequest $request, string $timezone): ?string
+    {
+        $ends = $request->string('ends')->toString();
+
+        if ($ends === 'never') {
+            return null;
+        }
+
+        if ($ends === 'count' || ($ends === '' && $request->filled('count'))) {
+            return $request->filled('count') ? 'COUNT='.$request->integer('count') : null;
+        }
+
+        if (! $request->filled('until')) {
+            return null;
+        }
+
+        return 'UNTIL='.CarbonImmutable::parse($request->string('until')->toString(), $timezone)
+            ->endOfDay()
+            ->utc()
+            ->format('Ymd\THis\Z');
     }
 }

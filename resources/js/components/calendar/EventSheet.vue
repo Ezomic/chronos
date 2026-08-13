@@ -30,6 +30,13 @@ import {
 } from '@/components/ui/sheet';
 import { reminderOptions, repeatOptions } from '@/lib/eventOptions';
 import { sourceLink } from '@/lib/eventSource';
+import {
+    describeRecurrence,
+    emptyRecurrence,
+    parseRrule,
+    WEEKDAYS,
+} from '@/lib/recurrence';
+import type { RecurrenceForm } from '@/lib/recurrence';
 import { store as storeTemplate } from '@/routes/event-templates';
 import { destroy, store, update } from '@/routes/events';
 import type {
@@ -69,8 +76,7 @@ interface FormState {
     all_day: boolean;
     start: string;
     end: string;
-    frequency: string;
-    until: string;
+    recurrence: RecurrenceForm;
     reminder: string;
 }
 
@@ -82,34 +88,9 @@ const form = reactive<FormState>({
     all_day: false,
     start: '',
     end: '',
-    frequency: 'none',
-    until: '',
+    recurrence: emptyRecurrence(),
     reminder: 'none',
 });
-
-const FREQ_MAP: Record<string, string> = {
-    DAILY: 'daily',
-    WEEKLY: 'weekly',
-    MONTHLY: 'monthly',
-    YEARLY: 'yearly',
-};
-
-function parseRrule(rrule: string | null): {
-    frequency: string;
-    until: string;
-} {
-    if (!rrule) {
-        return { frequency: 'none', until: '' };
-    }
-
-    const freq = rrule.match(/FREQ=(\w+)/);
-    const until = rrule.match(/UNTIL=(\d{4})(\d{2})(\d{2})/);
-
-    return {
-        frequency: (freq && FREQ_MAP[freq[1]]) || 'none',
-        until: until ? `${until[1]}-${until[2]}-${until[3]}` : '',
-    };
-}
 
 const errors = ref<Record<string, string>>({});
 const processing = ref(false);
@@ -208,9 +189,7 @@ function hydrate(): void {
         form.location = e.location ?? '';
         form.all_day = e.all_day;
 
-        const recurrence = parseRrule(e.rrule);
-        form.frequency = recurrence.frequency;
-        form.until = recurrence.until;
+        form.recurrence = parseRrule(e.rrule);
         form.reminder =
             e.reminder_minutes === null || e.reminder_minutes === undefined
                 ? 'none'
@@ -231,8 +210,7 @@ function hydrate(): void {
     form.all_day = false;
     form.start = props.defaultStart ?? `${date}T09:00`;
     form.end = props.defaultEnd ?? `${date}T10:00`;
-    form.frequency = 'none';
-    form.until = '';
+    form.recurrence = emptyRecurrence();
     form.reminder = 'none';
 }
 
@@ -320,12 +298,45 @@ function payload() {
         timezone: form.all_day ? null : preferredTimeZone(),
         starts_at: form.start,
         ends_at: form.end,
-        frequency: form.frequency,
-        until: form.frequency === 'none' ? null : form.until || null,
+        ...recurrencePayload(),
         reminder_minutes:
             form.reminder === 'none' ? null : Number(form.reminder),
         ...occurrenceScope(),
     };
+}
+
+const recurrenceSummary = computed(() =>
+    describeRecurrence(form.recurrence, form.start),
+);
+
+/**
+ * The recurrence half of the payload. Fields the chosen frequency does not use
+ * are left out rather than sent as noise the server would ignore.
+ */
+function recurrencePayload(): Record<string, unknown> {
+    const r = form.recurrence;
+
+    if (r.frequency === 'none') {
+        return { frequency: 'none' };
+    }
+
+    return {
+        frequency: r.frequency,
+        interval: r.interval,
+        byday: r.frequency === 'weekly' ? r.byday : [],
+        monthly_mode: r.frequency === 'monthly' ? r.monthly_mode : null,
+        ends: r.ends,
+        until: r.ends === 'until' ? r.until || null : null,
+        count: r.ends === 'count' ? r.count : null,
+    };
+}
+
+function toggleWeekday(day: string): void {
+    const days = form.recurrence.byday;
+
+    form.recurrence.byday = days.includes(day)
+        ? days.filter((d) => d !== day)
+        : [...days, day];
 }
 
 /**
@@ -364,8 +375,11 @@ function applyTemplate(template: EventTemplate): void {
     form.description = template.description ?? '';
     form.location = template.location ?? '';
     form.all_day = template.all_day;
-    form.frequency = template.frequency ?? 'none';
-    form.until = '';
+    form.recurrence = {
+        ...emptyRecurrence(),
+        frequency:
+            (template.frequency as RecurrenceForm['frequency']) ?? 'none',
+    };
     form.reminder =
         template.reminder_minutes === null
             ? 'none'
@@ -421,7 +435,10 @@ function templatePayload() {
         all_day: form.all_day,
         duration_minutes: durationMinutes,
         default_start_time: form.all_day ? null : form.start.slice(11, 16),
-        frequency: form.frequency === 'none' ? null : form.frequency,
+        frequency:
+            form.recurrence.frequency === 'none'
+                ? null
+                : form.recurrence.frequency,
         reminder_minutes:
             form.reminder === 'none' ? null : Number(form.reminder),
     };
@@ -705,7 +722,7 @@ function remove(): void {
                     <Label for="repeat">Repeat</Label>
                     <select
                         id="repeat"
-                        v-model="form.frequency"
+                        v-model="form.recurrence.frequency"
                         class="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs"
                     >
                         <option
@@ -719,13 +736,125 @@ function remove(): void {
                 </div>
 
                 <div
-                    v-if="scope === 'series' && form.frequency !== 'none'"
-                    class="grid gap-2"
+                    v-if="
+                        scope === 'series' &&
+                        form.recurrence.frequency !== 'none'
+                    "
+                    class="grid gap-4 rounded-md border border-input p-3"
                 >
-                    <Label for="until">Until (optional)</Label>
-                    <Input id="until" v-model="form.until" type="date" />
-                    <p v-if="errors.until" class="text-sm text-destructive">
-                        {{ errors.until }}
+                    <div class="grid gap-2">
+                        <Label for="interval">Every</Label>
+                        <div class="flex items-center gap-2">
+                            <Input
+                                id="interval"
+                                v-model.number="form.recurrence.interval"
+                                type="number"
+                                min="1"
+                                max="99"
+                                class="w-20"
+                            />
+                            <span class="text-sm text-muted-foreground">
+                                {{
+                                    form.recurrence.frequency === 'daily'
+                                        ? 'day(s)'
+                                        : form.recurrence.frequency === 'weekly'
+                                          ? 'week(s)'
+                                          : form.recurrence.frequency ===
+                                              'monthly'
+                                            ? 'month(s)'
+                                            : 'year(s)'
+                                }}
+                            </span>
+                        </div>
+                        <p
+                            v-if="errors.interval"
+                            class="text-sm text-destructive"
+                        >
+                            {{ errors.interval }}
+                        </p>
+                    </div>
+
+                    <div
+                        v-if="form.recurrence.frequency === 'weekly'"
+                        class="grid gap-2"
+                    >
+                        <Label>On</Label>
+                        <div class="flex flex-wrap gap-1">
+                            <button
+                                v-for="day in WEEKDAYS"
+                                :key="day.value"
+                                type="button"
+                                class="h-8 w-11 rounded-md border text-xs"
+                                :class="
+                                    form.recurrence.byday.includes(day.value)
+                                        ? 'border-primary bg-primary text-primary-foreground'
+                                        : 'border-input'
+                                "
+                                @click="toggleWeekday(day.value)"
+                            >
+                                {{ day.label }}
+                            </button>
+                        </div>
+                        <p class="text-xs text-muted-foreground">
+                            Leave all unselected to repeat on the event's own
+                            day.
+                        </p>
+                    </div>
+
+                    <div
+                        v-if="form.recurrence.frequency === 'monthly'"
+                        class="grid gap-2"
+                    >
+                        <Label for="monthly-mode">Repeats by</Label>
+                        <select
+                            id="monthly-mode"
+                            v-model="form.recurrence.monthly_mode"
+                            class="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs"
+                        >
+                            <option value="day_of_month">
+                                Day of the month
+                            </option>
+                            <option value="weekday">Weekday position</option>
+                        </select>
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label for="ends">Ends</Label>
+                        <select
+                            id="ends"
+                            v-model="form.recurrence.ends"
+                            class="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs"
+                        >
+                            <option value="never">Never</option>
+                            <option value="until">On a date</option>
+                            <option value="count">
+                                After a number of times
+                            </option>
+                        </select>
+
+                        <Input
+                            v-if="form.recurrence.ends === 'until'"
+                            v-model="form.recurrence.until"
+                            type="date"
+                        />
+                        <Input
+                            v-if="form.recurrence.ends === 'count'"
+                            v-model.number="form.recurrence.count"
+                            type="number"
+                            min="1"
+                            max="999"
+                            class="w-24"
+                        />
+                        <p v-if="errors.until" class="text-sm text-destructive">
+                            {{ errors.until }}
+                        </p>
+                        <p v-if="errors.count" class="text-sm text-destructive">
+                            {{ errors.count }}
+                        </p>
+                    </div>
+
+                    <p class="text-xs text-muted-foreground">
+                        {{ recurrenceSummary }}
                     </p>
                 </div>
 

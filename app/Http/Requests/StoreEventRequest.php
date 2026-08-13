@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Concerns\ValidatesRecurrence;
 use App\Concerns\ValidatesWritableCalendar;
 use App\Models\Event;
 use Illuminate\Foundation\Http\FormRequest;
@@ -11,6 +12,7 @@ use Illuminate\Validation\Rule;
 
 class StoreEventRequest extends FormRequest
 {
+    use ValidatesRecurrence;
     use ValidatesWritableCalendar;
 
     public function authorize(): bool
@@ -32,8 +34,7 @@ class StoreEventRequest extends FormRequest
             'timezone' => ['nullable', 'timezone:all'],
             'starts_at' => ['required', 'date'],
             'ends_at' => ['required', 'date', $this->boolean('all_day') ? 'after_or_equal:starts_at' : 'after:starts_at'],
-            'frequency' => ['nullable', Rule::in(['none', 'daily', 'weekly', 'monthly', 'yearly'])],
-            'until' => ['nullable', 'date', 'after_or_equal:starts_at'],
+            ...$this->recurrenceRules(),
             'reminder_minutes' => ['nullable', 'integer', Rule::in(Event::REMINDER_CHOICES)],
         ];
     }
