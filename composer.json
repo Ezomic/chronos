@@ -10,6 +10,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.3",
+        "brick/math": "^0.17",
         "inertiajs/inertia-laravel": "^3.0",
         "laravel/chisel": "^0.1.0",
         "laravel/fortify": "^1.37.2",
@@ -18,6 +19,7 @@
         "laravel/socialite": "^5.28",
         "laravel/tinker": "^3.0",
         "laravel/wayfinder": "^0.1.14",
+        "minishlink/web-push": "^11.0",
         "sabre/vobject": "^4.5",
         "simshaun/recurr": "^5.0",
         "socialiteproviders/microsoft": "^4.9",

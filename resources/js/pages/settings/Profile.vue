@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Form, Head, usePage } from '@inertiajs/vue3';
+import { Form, Head, router, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import DeleteUser from '@/components/DeleteUser.vue';
@@ -15,7 +15,9 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { usePushNotifications } from '@/composables/usePushNotifications';
 import { edit } from '@/routes/profile';
+import { destroy as destroyPushSubscription } from '@/routes/push-subscriptions';
 
 defineOptions({
     layout: {
@@ -28,9 +30,24 @@ defineOptions({
     },
 });
 
-defineProps<{
+interface PushDevice {
+    id: number;
+    label: string;
+    added_at_diff: string;
+    last_used_at_diff: string | null;
+}
+
+const props = defineProps<{
     timezones: string[];
+    vapidPublicKey: string;
+    pushDevices: PushDevice[];
 }>();
+
+const push = usePushNotifications(props.vapidPublicKey);
+
+function removeDevice(id: number): void {
+    router.delete(destroyPushSubscription(id).url, { preserveScroll: true });
+}
 
 const page = usePage();
 const user = computed(() => page.props.auth.user);
@@ -114,6 +131,72 @@ const user = computed(() => page.props.auth.user);
                 >
             </div>
         </Form>
+    </div>
+
+    <div class="mt-10 flex flex-col space-y-6">
+        <Heading
+            variant="small"
+            title="Reminder notifications"
+            description="Send event reminders to this device instead of your inbox"
+        />
+
+        <div class="space-y-4">
+            <p class="text-sm text-muted-foreground">
+                Reminders go to your devices when at least one is listening, and
+                to email when none is.
+            </p>
+
+            <div v-if="pushDevices.length" class="divide-y rounded-md border">
+                <div
+                    v-for="device in pushDevices"
+                    :key="device.id"
+                    class="flex items-center justify-between gap-4 p-3"
+                >
+                    <div class="min-w-0">
+                        <p class="truncate text-sm font-medium">
+                            {{ device.label }}
+                        </p>
+                        <p class="text-xs text-muted-foreground">
+                            Added {{ device.added_at_diff
+                            }}<template v-if="device.last_used_at_diff">
+                                , last used {{ device.last_used_at_diff }}
+                            </template>
+                        </p>
+                    </div>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        @click="removeDevice(device.id)"
+                    >
+                        Remove
+                    </Button>
+                </div>
+            </div>
+
+            <p v-else class="text-sm text-muted-foreground">
+                No devices yet. Reminders are going to your email.
+            </p>
+
+            <Button
+                type="button"
+                :disabled="!push.supported.value || push.busy.value"
+                @click="push.enable()"
+            >
+                {{ push.busy.value ? 'Enabling...' : 'Enable on this device' }}
+            </Button>
+
+            <p
+                v-if="!push.supported.value"
+                class="text-sm text-muted-foreground"
+            >
+                This browser cannot receive push notifications, or the server
+                has no VAPID keys configured.
+            </p>
+            <p v-if="push.error.value" class="text-sm text-destructive">
+                {{ push.error.value }}
+            </p>
+        </div>
     </div>
 
     <DeleteUser />
