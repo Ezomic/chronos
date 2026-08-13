@@ -27,6 +27,20 @@ class ProfileController extends Controller
             'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
             'status' => $request->session()->get('status'),
             'timezones' => DateTimeZone::listIdentifiers(),
+            // Reminders go to these devices when there are any, and to email
+            // when there are none.
+            'vapidPublicKey' => config('webpush.vapid.publicKey'),
+            'pushDevices' => $this->currentUser()->pushSubscriptions()
+                ->latest()
+                ->get()
+                ->map(fn ($device) => [
+                    'id' => $device->id,
+                    'label' => $device->device_label ?? 'Unnamed device',
+                    'added_at_diff' => $device->created_at?->diffForHumans() ?? '',
+                    'last_used_at_diff' => $device->last_used_at?->diffForHumans(),
+                ])
+                ->values()
+                ->all(),
         ]);
     }
 

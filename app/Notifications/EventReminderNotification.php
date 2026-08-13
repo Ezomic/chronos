@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Notifications;
 
 use App\Models\Event;
+use App\Models\User;
+use App\Notifications\Channels\WebPushChannel;
 use Carbon\CarbonInterface;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -24,11 +26,38 @@ class EventReminderNotification extends Notification
     ) {}
 
     /**
+     * Push where the user has a device listening, mail otherwise. Never both:
+     * one reminder should arrive once.
+     *
      * @return array<int, string>
      */
     public function via(object $notifiable): array
     {
-        return ['mail'];
+        $hasDevice = $notifiable instanceof User
+            && $notifiable->pushSubscriptions()->exists();
+
+        return $hasDevice ? [WebPushChannel::class] : ['mail'];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function toWebPush(object $notifiable): array
+    {
+        $start = ($this->occurrenceStart ?? $this->event->starts_at)
+            ->timezone($this->event->timezone);
+
+        return [
+            'title' => $this->event->title,
+            'body' => $this->event->all_day
+                ? $start->isoFormat('dddd D MMMM')
+                : $start->isoFormat('dddd D MMMM, HH:mm'),
+            'url' => route('calendar.index', [
+                'view' => 'day',
+                'date' => $start->toDateString(),
+            ]),
+            'tag' => 'event-'.$this->event->id.'-'.$start->format('YmdHi'),
+        ];
     }
 
     public function toMail(object $notifiable): MailMessage
