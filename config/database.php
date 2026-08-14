@@ -38,9 +38,17 @@ return [
             'database' => env('DB_DATABASE', database_path('database.sqlite')),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
-            'busy_timeout' => null,
-            'journal_mode' => null,
-            'synchronous' => null,
+            // Chronos writes from three places at once: the every-minute
+            // scheduler, the queue worker and web requests. Left unset, a
+            // blocked write fails instantly with "database is locked" instead
+            // of waiting, which was quietly losing calendar syncs (CHRON-68).
+            'busy_timeout' => env('DB_BUSY_TIMEOUT', 5000),
+            // WAL lets readers and a writer work at the same time, which
+            // rollback-journal mode does not.
+            'journal_mode' => env('DB_JOURNAL_MODE', 'WAL'),
+            // Safe under WAL: a crash can lose the last commits but cannot
+            // corrupt the database, and it avoids an fsync per write.
+            'synchronous' => env('DB_SYNCHRONOUS', 'NORMAL'),
             'transaction_mode' => 'DEFERRED',
         ],
 
