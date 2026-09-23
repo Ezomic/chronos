@@ -1,7 +1,9 @@
 name: Deploy to production
 
-# Manual deploys only. Production is deployed by hand over SSH; this workflow
-# is kept as a workflow_dispatch escape hatch and never triggers automatically.
+# The deploy itself runs on the server. This key is pinned to app-deploy on the production
+# box, so the only thing a leaked secret can do is redeploy this app's main branch: no shell,
+# no other app. app-deploy builds the release beside the live one, switches a symlink and
+# switches back if /up fails afterwards. It lives in Ezomic/infra.
 on:
   workflow_dispatch:
 concurrency:
@@ -14,44 +16,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.DEPLOY_SSH_HOST }}
-          username: ${{ secrets.DEPLOY_SSH_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            set -e
-            cd /home/deploy/chronos
-            php artisan down --retry=15
-            git fetch origin
-            git reset --hard origin/main
-            composer install --no-dev --optimize-autoloader --no-interaction
-            # Clear the previous deploy's caches before building. Wayfinder codegen
-            # (npm run build) introspects routes, so stale cached routes would omit
-            # any newly added route/controller and break the frontend build.
-            php artisan optimize:clear
-            npm ci
-            npm run build
-            php artisan migrate --force
-            chmod 664 database/database.sqlite database/database.sqlite-wal database/database.sqlite-shm 2>/dev/null || true
-            chgrp www-data database/database.sqlite database/database.sqlite-wal database/database.sqlite-shm 2>/dev/null || true
-            # setgid on database/: the scheduler runs as deploy, not www-data, so a
-            # WAL/SHM file it recreates would land group=deploy and be unwritable by
-            # PHP-FPM (www-data). This is the THI-298 failure mode from zero/mail-app.
-            chmod g+s database
-            # Rebuild config/route/view cache from the new code. Without this the
-            # old cache persists and the fpm reload below just reloads stale routes.
-            php artisan optimize
-            # Tell the queue daemons to exit once their current job finishes, so
-            # supervisor restarts them on the new code. Without this they keep
-            # the previous release loaded in memory until --max-time=3600
-            # recycles them, up to an hour of queued jobs running old code. It
-            # runs after `optimize` so the workers boot with the fresh cache.
-            php artisan queue:restart
-            # No `systemctl reload php8.4-fpm` here on purpose. All 21 sites on the
-            # droplet share one php-fpm master and therefore one opcache, so a reload
-            # to deploy this app would discard ~350MB of cached bytecode belonging to
-            # every other app and force them all to recompile. opcache.validate_timestamps
-            # is on, so the new code is picked up on the next request without it.
-            # See INFRA-28. If that setting is ever turned off, this must come back.
-            php artisan up
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+          DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          DEPLOY_SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          printf '%s\n' "$DEPLOY_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy -o BatchMode=yes "$DEPLOY_SSH_USER@$DEPLOY_SSH_HOST" deploy
