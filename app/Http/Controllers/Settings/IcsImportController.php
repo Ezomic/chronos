@@ -123,10 +123,6 @@ class IcsImportController extends Controller
         $cutoff = now()->subDay()->getTimestamp();
 
         foreach ($disk->files(self::DIRECTORY) as $file) {
-            if (! is_string($file)) {
-                continue;
-            }
-
             if ($disk->lastModified($file) < $cutoff) {
                 $disk->delete($file);
             }
