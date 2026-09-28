@@ -24,7 +24,7 @@
         "simshaun/recurr": "^5.0",
         "socialiteproviders/microsoft": "^4.9",
         "thijssensoftware/flare-client": "^0.3.4",
-        "thijssensoftware/id-client": "^0.3.0",
+        "thijssensoftware/id-client": "^0.4.1",
         "thijssensoftware/snag-client": "^0.1.0"
     },
     "require-dev": {
