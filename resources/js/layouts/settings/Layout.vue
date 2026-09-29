@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { toUrl } from '@/lib/utils';
+import { index as apiTokensIndex } from '@/routes/api-tokens';
 import { edit as editAppearance } from '@/routes/appearance';
 import { edit as editCalendars } from '@/routes/calendars';
 import { edit as editTemplates } from '@/routes/event-templates';
@@ -20,6 +21,10 @@ const sidebarNavItems: NavItem[] = [
     {
         title: 'Security',
         href: editSecurity(),
+    },
+    {
+        title: 'API tokens',
+        href: apiTokensIndex(),
     },
     {
         title: 'Calendars',

@@ -20,7 +20,9 @@ field to a response is not breaking and will happen without a version bump.
 
 ## Authentication
 
-A Sanctum bearer token, minted on the Chronos host:
+A Sanctum bearer token. Create one under Settings, API tokens: pick its
+abilities and the app it speaks for, and copy it from the page, which shows it
+only once. It can also be minted on the Chronos host:
 
 ```bash
 php artisan calendar:token you@example.com --name=zero --ability=events:create --ability=events:manage --app=zero
@@ -32,6 +34,9 @@ Accept: application/json
 ```
 
 The token is bound to one Chronos user; events land on that user's calendars.
+It does not expire. It stops working when it is revoked on the settings page,
+or when ID revokes the user's access to Chronos, which deletes all of their
+tokens. A plain sign-out at ID leaves tokens alone.
 
 ### Abilities
 

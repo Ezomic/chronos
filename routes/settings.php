@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\CalendarOAuthController;
+use App\Http\Controllers\Settings\ApiTokenController;
 use App\Http\Controllers\Settings\CalendarController;
 use App\Http\Controllers\Settings\ConnectedAccountController;
 use App\Http\Controllers\Settings\EventTemplateController;
@@ -48,6 +49,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('settings/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     Route::get('settings/security', [SecurityController::class, 'edit'])->name('security.edit');
+
+    Route::get('settings/api-tokens', [ApiTokenController::class, 'index'])->name('api-tokens.index');
+    Route::post('settings/api-tokens', [ApiTokenController::class, 'store'])->name('api-tokens.store');
+    Route::delete('settings/api-tokens/{token}', [ApiTokenController::class, 'destroy'])
+        ->whereNumber('token')
+        ->name('api-tokens.destroy');
 
     Route::get('settings/appearance', fn () => Inertia::render('settings/Appearance'))->name('appearance.edit');
 });

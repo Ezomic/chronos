@@ -2,6 +2,7 @@
 
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Http\Middleware\AuthenticateSession;
 use Laravel\Sanctum\Sanctum;
 
@@ -70,7 +71,10 @@ return [
     |
     */
 
-    'token_prefix' => env('SANCTUM_TOKEN_PREFIX', ''),
+    // Derived from the app's name, as the session cookie's is. Only new tokens
+    // carry it: the prefix is part of the hashed secret, so existing tokens
+    // keep verifying.
+    'token_prefix' => env('SANCTUM_TOKEN_PREFIX', Str::slug((string) env('APP_NAME', 'laravel'), '_').'_'),
 
     /*
     |--------------------------------------------------------------------------
