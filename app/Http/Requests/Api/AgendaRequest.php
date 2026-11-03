@@ -92,7 +92,7 @@ class AgendaRequest extends FormRequest
         $minute = (int) ($parts[5] ?? 0);
         $second = (int) ($parts[6] ?? 0);
 
-        if (! checkdate($month, $day, $year) || $year < 1 || $hour > 23 || $minute > 59 || $second > 59) {
+        if (! checkdate($month, $day, $year) || $year < 1970 || $year > 2100 || $hour > 23 || $minute > 59 || $second > 59) {
             return null;
         }
 

@@ -187,7 +187,7 @@ A value with an offset (`Z`, `+02:00`) is an instant. A value without one, or a
 bare date (`2026-07-20`), is read in the user's timezone. Percent-encode the
 `+` of an offset as `%2B`: an unencoded `+` reaches the server as a space and is
 a 422. The range may be at most **60 days** (`to` minus `from`), otherwise 422.
-`to` equal to or before `from` is also a 422.
+`to` equal to or before `from` is also a 422, as is a year outside 1970 to 2100.
 
 ```json
 {

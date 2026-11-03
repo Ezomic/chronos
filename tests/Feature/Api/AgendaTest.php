@@ -224,7 +224,7 @@ describe('range input', function () {
     it('reads offsets and zoneless values as instants', function (string $from, string $expected) {
         agendaAs(agendaUser());
 
-        $this->getJson('/api/v1/agenda?'.http_build_query(['from' => $from, 'to' => '9999-01-01T00:00:00Z']))
+        $this->getJson('/api/v1/agenda?'.http_build_query(['from' => $from, 'to' => '2090-01-01T00:00:00Z']))
             ->assertStatus(422);
         $this->getJson('/api/v1/agenda?'.http_build_query(['from' => $from]))
             ->assertOk()
@@ -237,7 +237,6 @@ describe('range input', function () {
         'fraction' => ['2026-07-20T09:00:00.123456Z', '2026-07-20T09:00:00Z'],
         'plus fourteen' => ['2026-07-20T00:00:00+14:00', '2026-07-19T10:00:00Z'],
         'minus twelve' => ['2026-07-20T00:00:00-12:00', '2026-07-20T12:00:00Z'],
-        'far past' => ['0001-01-01T00:00:00Z', '0001-01-01T00:00:00Z'],
     ]);
 
     it('rejects values that are not ISO 8601', function (string $field, string $value) {
@@ -259,6 +258,9 @@ describe('range input', function () {
                 'offset out of range' => '2026-07-20T09:00:00+99:00',
                 'sql' => "2026-07-20'; DROP TABLE events;--",
                 'huge' => str_repeat('9', 5000),
+                'year zero' => '0000-01-01T00:00:00Z',
+                'far past' => '0001-01-01T00:00:00Z',
+                'far future' => '9999-12-31T00:00:00Z',
             ] as $label => $value) {
                 yield "{$field} {$label}" => [$field, $value];
             }
@@ -347,8 +349,8 @@ describe('range input', function () {
             ->assertOk()
             ->assertJsonPath('data', []);
     })->with([
-        'far past' => ['0001-01-01T00:00:00Z', '0001-02-01T00:00:00Z'],
-        'far future' => ['9998-01-01T00:00:00Z', '9998-02-01T00:00:00Z'],
+        'past' => ['1990-01-01T00:00:00Z', '1990-02-01T00:00:00Z'],
+        'future' => ['2099-01-01T00:00:00Z', '2099-02-01T00:00:00Z'],
     ]);
 
     it('ignores unrelated query parameters', function () {
