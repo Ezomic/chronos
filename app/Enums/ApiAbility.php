@@ -13,10 +13,12 @@ enum ApiAbility: string
 {
     case EventsCreate = 'events:create';
     case EventsManage = 'events:manage';
+    case AgendaRead = 'agenda:read';
 
     public function description(): string
     {
         return match ($this) {
+            self::AgendaRead => 'Read your upcoming agenda (titles, times, calendar names and colours)',
             self::EventsCreate => 'Create events',
             self::EventsManage => 'List, update and delete the events its app created',
         };

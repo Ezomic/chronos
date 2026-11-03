@@ -44,6 +44,7 @@ tokens. A plain sign-out at ID leaves tokens alone.
 |---------|--------|
 | `events:create` | `POST /events` |
 | `events:manage` | `GET /events`, `PATCH /events/{id}`, `DELETE /events/{id}` |
+| `agenda:read` | `GET /agenda`. A pure read of the token user's own agenda; needs no `app:{slug}` |
 | `app:{slug}` | Says which consumer the token speaks for |
 
 `app:{slug}` is not a permission, it is an identity. The manage endpoints need it
@@ -167,6 +168,73 @@ invisible.
 
 `changed_through` is `null` on a listing that is not polling.
 
+## GET /agenda
+
+The token user's upcoming occurrences, for read-only consumers such as a
+home-screen widget. Needs `agenda:read` and nothing else: it is not tied to an
+app, and a token with only `events:create` or `events:manage` gets **403**.
+
+```
+GET /api/v1/agenda?from=2026-07-20T00:00:00%2B02:00&to=2026-07-27T00:00:00%2B02:00
+```
+
+| Param | Notes |
+|-------|-------|
+| `from` | ISO 8601. Default: the start of today in the user's Settings timezone |
+| `to` | ISO 8601, after `from`. Default: `from` plus 7 days |
+
+A value with an offset (`Z`, `+02:00`) is an instant. A value without one, or a
+bare date (`2026-07-20`), is read in the user's timezone. Percent-encode the
+`+` of an offset as `%2B`: an unencoded `+` reaches the server as a space and is
+a 422. The range may be at most **60 days** (`to` minus `from`), otherwise 422.
+`to` equal to or before `from` is also a 422.
+
+```json
+{
+  "data": [
+    {
+      "id": "42@2026-07-20T07:00:00Z",
+      "event_id": 42,
+      "title": "Kickoff with Acme",
+      "start": "2026-07-20T07:00:00Z",
+      "end": "2026-07-20T07:30:00Z",
+      "timezone": "Europe/Amsterdam",
+      "all_day": false,
+      "is_free": false,
+      "calendar": { "name": "Work", "color": "#5B5BD6" },
+      "url": "https://chronos.thijssensoftware.nl/calendar?view=day&date=2026-07-20"
+    }
+  ],
+  "meta": { "from": "2026-07-19T22:00:00Z", "to": "2026-07-26T22:00:00Z" }
+}
+```
+
+- Occurrences are expanded, so a recurring event appears once per occurrence in
+  range. `id` is `{event_id}@{start}`, stable for one occurrence, and
+  `event_id` is the event or series it belongs to.
+- An occurrence is included when it overlaps the range, so one that started
+  before `from` or ends after `to` is returned whole.
+- Sorted by `start` ascending.
+- Recurrence overrides apply as in the web calendar: a moved occurrence shows at
+  its new time, a cancelled occurrence is absent, and deleted events are absent.
+- Events from all of the user's visible calendars are included, mirrored
+  calendars and Bookings among them. A calendar the user has hidden in Chronos
+  is left out. Nothing else about an event is exposed: no description, location,
+  attendees, notes or source URLs.
+- `start` and `end` are UTC, always with a `Z`. `timezone` is the event's own
+  zone, for showing it as the event was planned.
+- An **all-day** event is a floating date: `start` and `end` are midnight UTC of
+  the first date and of the day after the last, `timezone` is `UTC`, and
+  `all_day` is true. Show the date, do not convert it to the viewer's zone.
+  Whether it falls in the range is decided on the user's local calendar day.
+- `url` is a deep link to the day of the occurrence in Chronos.
+- `is_free` is true for an event that does not block time.
+
+**Caching.** The response carries a strong `ETag` over its body. Send it back as
+`If-None-Match` and an unchanged agenda answers **304** with no body. The tag
+changes whenever anything in the body does, including the default `from`, which
+moves at midnight in the user's timezone.
+
 ## PATCH /events/{id}
 
 Partial update. Needs `events:manage` and `app:{slug}`. Send only what changed.
@@ -216,9 +284,10 @@ listing; everywhere else a deleted event is absent rather than flagged.
 | 201 | Created |
 | 204 | Deleted |
 | 401 | Missing or invalid token |
+| 304 | `GET /agenda` only: the `If-None-Match` validator still matches |
 | 403 | Token lacks the ability, has no `app:` scope, or claims another app's source |
 | 404 | Event does not exist, or is not one this token may touch |
-| 422 | Validation failed, or the user has no writable calendar |
+| 422 | Validation failed (for `GET /agenda`: bad or reversed range, or over 60 days), or the user has no writable calendar |
 | 429 | Rate limited |
 
 A 404 rather than a 403 on the manage endpoints is deliberate: a token cannot use

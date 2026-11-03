@@ -254,3 +254,65 @@ it('ships the consumer labels to the frontend', function () {
         ->get(route('calendar.index'))
         ->assertInertia(fn ($page) => $page->where('eventSourceLabels', ['zero' => 'Open in Mail']));
 });
+
+const CONTRACT_AGENDA_ITEM_KEYS = [
+    'id',
+    'event_id',
+    'title',
+    'start',
+    'end',
+    'timezone',
+    'all_day',
+    'is_free',
+    'calendar',
+    'url',
+];
+
+it('serves the agenda under both /api/v1 and the unversioned alias', function (string $path) {
+    $this->withToken(contractToken(contractUser(), ['agenda:read']));
+
+    $this->getJson($path)->assertOk()->assertJsonStructure(['data', 'meta' => ['from', 'to']]);
+})->with(['/api/v1/agenda', '/api/agenda']);
+
+it('returns exactly the documented agenda item', function () {
+    $user = contractUser();
+    $calendar = $user->calendars()->firstOrFail();
+    $event = Event::factory()->for($calendar)->create([
+        'title' => 'Kickoff with Acme',
+        'description' => 'Agenda attached',
+        'location' => 'Room A',
+        'starts_at' => now()->addDay()->startOfHour(),
+        'ends_at' => now()->addDay()->startOfHour()->addMinutes(30),
+        'timezone' => 'Europe/Amsterdam',
+        'is_free' => true,
+    ]);
+
+    $this->withToken(contractToken($user, ['agenda:read']));
+
+    $body = $this->getJson('/api/v1/agenda')->assertOk()->json();
+    $item = $body['data'][0];
+
+    expect(array_keys($body))->toBe(['data', 'meta'])
+        ->and(array_keys($body['meta']))->toBe(['from', 'to'])
+        ->and(array_keys($item))->toBe(CONTRACT_AGENDA_ITEM_KEYS)
+        ->and(array_keys($item['calendar']))->toBe(['name', 'color'])
+        ->and($item['event_id'])->toBe($event->id)
+        ->and($item['id'])->toBe($event->id.'@'.$item['start'])
+        ->and($item['start'])->toMatch('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/')
+        ->and($item['end'])->toMatch('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/')
+        ->and($item['timezone'])->toBe('Europe/Amsterdam')
+        ->and($item['all_day'])->toBeFalse()
+        ->and($item['is_free'])->toBeTrue()
+        ->and($item['url'])->toContain('view=day');
+});
+
+it('keeps agenda:read separate from the event abilities', function () {
+    $user = contractUser();
+
+    $this->withToken(contractToken($user, ['events:create', 'events:manage', 'app:zero']));
+    $this->getJson('/api/v1/agenda')->assertForbidden();
+
+    app('auth')->forgetGuards();
+    $this->withToken(contractToken($user, ['agenda:read']));
+    $this->getJson('/api/v1/events')->assertForbidden();
+});

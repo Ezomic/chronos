@@ -50,6 +50,10 @@ class RecurrenceExpander
         $recurrences = (new ArrayTransformer($config))->transform(
             $rule,
             new BetweenConstraint($from->toDateTime(), $to->toDateTime(), true),
+            // Recurr counts occurrences before the window toward its 732 cap, so
+            // an open-ended series older than two years would expand to nothing.
+            // A COUNT rule needs them counted to know where it ends.
+            countConstraintFailures: $rule->getCount() !== null,
         );
 
         $skipped = $this->skippedStarts($event);

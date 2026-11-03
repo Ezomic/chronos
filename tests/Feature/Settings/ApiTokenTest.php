@@ -75,8 +75,20 @@ it('offers the abilities the API checks and the configured consumer apps', funct
         ->assertInertia(fn (Assert $page) => $page
             ->where('abilityOptions.0.value', 'events:create')
             ->where('abilityOptions.1.value', 'events:manage')
-            ->has('abilityOptions', 2)
+            ->where('abilityOptions.2.value', 'agenda:read')
+            ->has('abilityOptions', 3)
             ->where('appOptions', ['zero', 'tempo']));
+});
+
+it('creates an agenda-only token without an app scope', function () {
+    $user = tokenOwner();
+
+    $this->post('/settings/api-tokens', [
+        'name' => 'Widget',
+        'abilities' => ['agenda:read'],
+    ])->assertRedirect('/settings/api-tokens');
+
+    expect($user->tokens()->sole()->abilities)->toBe(['agenda:read']);
 });
 
 it('creates a token with the chosen abilities and app, and reveals the plaintext exactly once', function () {
