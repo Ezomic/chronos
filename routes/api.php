@@ -1,9 +1,14 @@
 <?php
 
+use App\Http\Controllers\Api\AgendaController;
 use App\Http\Controllers\Api\EventController;
 use Illuminate\Support\Facades\Route;
 
 $events = function (): void {
+    // A pure read of the token user's own agenda; it needs no app scope.
+    Route::get('/agenda', AgendaController::class)
+        ->middleware('ability:agenda:read');
+
     Route::post('/events', [EventController::class, 'store'])
         ->middleware('ability:events:create');
 

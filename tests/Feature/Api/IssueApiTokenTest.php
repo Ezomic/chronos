@@ -3,6 +3,14 @@
 use App\Models\User;
 use Laravel\Sanctum\PersonalAccessToken;
 
+it('mints an agenda token with no app scope', function () {
+    $user = User::factory()->create();
+
+    $this->artisan('calendar:token', ['email' => $user->email, '--ability' => ['agenda:read']])->assertSuccessful();
+
+    expect(PersonalAccessToken::query()->firstOrFail()->abilities)->toBe(['agenda:read']);
+});
+
 it('mints an events:create token by default', function () {
     $user = User::factory()->create();
 
