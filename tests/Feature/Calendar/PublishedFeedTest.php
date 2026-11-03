@@ -139,16 +139,18 @@ it('writes an all-day event as dates', function () {
     $user = User::factory()->create();
     $calendar = publishedCalendar($user);
 
+    $start = CarbonImmutable::now('UTC')->addDays(20)->startOfDay();
+
     Event::factory()->for($calendar)->allDay()->create([
         'title' => 'Conference',
-        'starts_at' => CarbonImmutable::parse('2026-07-20T00:00:00Z'),
-        'ends_at' => CarbonImmutable::parse('2026-07-21T00:00:00Z'),
+        'starts_at' => $start,
+        'ends_at' => $start->addDay(),
     ]);
 
     $body = $this->get(feedFor($calendar))->getContent();
 
-    expect($body)->toContain('DTSTART;VALUE=DATE:20260720')
-        ->and($body)->toContain('DTEND;VALUE=DATE:20260721');
+    expect($body)->toContain('DTSTART;VALUE=DATE:'.$start->format('Ymd'))
+        ->and($body)->toContain('DTEND;VALUE=DATE:'.$start->addDay()->format('Ymd'));
 });
 
 it('leaves deleted events out of the feed', function () {

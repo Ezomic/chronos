@@ -222,3 +222,15 @@ it('rate limits one address after ten attempts an hour', function () {
     $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.9'])
         ->post('/book', bookingPayload('2026-11-04 10:00'))->assertRedirect();
 });
+
+it('keys the rate limit on the connecting address, not on a header the visitor can set', function () {
+    foreach (range(1, 10) as $i) {
+        $this->withHeaders(['X-Forwarded-For' => "198.51.100.{$i}"])
+            ->post('/book', bookingPayload('2026-11-04 10:00', ['name' => '']))
+            ->assertSessionHasErrors('name');
+    }
+
+    $this->withHeaders(['X-Forwarded-For' => '198.51.100.99'])
+        ->post('/book', bookingPayload('2026-11-04 10:00'))
+        ->assertTooManyRequests();
+});

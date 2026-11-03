@@ -101,9 +101,10 @@ it('requests a local timezone and stores mirrored events in it', function () {
     syncMs(microsoftAccount());
 
     $event = Event::query()->where('external_id', 'tz-1')->firstOrFail();
+    $expected = CarbonImmutable::parse($base->format('Y-m-d').' 09:00', 'Europe/Amsterdam')->utc()->format('H:i');
+
     expect($event->timezone)->toBe('Europe/Amsterdam')
-        // 09:00 Amsterdam (+02:00) is 07:00 UTC.
-        ->and($event->starts_at->utc()->format('H:i'))->toBe('07:00');
+        ->and($event->starts_at->utc()->format('H:i'))->toBe($expected);
 
     Http::assertSent(fn (Request $request) => str_contains($request->url(), 'calendarView')
         && $request->header('Prefer')[0] === 'outlook.timezone="Europe/Amsterdam"');

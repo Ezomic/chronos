@@ -95,8 +95,9 @@ it('converts a zoned ICS event to UTC and keeps its timezone name', function () 
 
     $event = Event::query()->where('external_id', 'zoned-1')->firstOrFail();
 
-    // 20:30 Amsterdam (summer, UTC+2) stored as 18:30 UTC.
-    expect($event->starts_at->format('H:i'))->toBe('18:30')
+    $expected = CarbonImmutable::parse($day.'T203000', 'Europe/Amsterdam')->utc()->format('H:i');
+
+    expect($event->starts_at->format('H:i'))->toBe($expected)
         ->and($event->timezone)->toBe('Europe/Amsterdam');
 });
 
