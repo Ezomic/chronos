@@ -86,7 +86,7 @@ class StoreBookingRequest extends FormRequest
 
         if (is_string($name)) {
             // One line, so a name can never smuggle a line break into a mail header.
-            $this->merge(['name' => trim((string) preg_replace('/[\p{C}\s]+/u', ' ', $name))]);
+            $this->merge(['name' => trim((string) preg_replace('/[\p{Cc}\s]+/u', ' ', $name))]);
         }
     }
 }
