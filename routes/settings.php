@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\CalendarOAuthController;
 use App\Http\Controllers\Settings\ApiTokenController;
+use App\Http\Controllers\Settings\BookingSettingsController;
 use App\Http\Controllers\Settings\CalendarController;
 use App\Http\Controllers\Settings\ConnectedAccountController;
 use App\Http\Controllers\Settings\EventTemplateController;
@@ -25,6 +26,9 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('settings/calendars/{calendar}', [CalendarController::class, 'destroy'])->name('calendars.destroy');
     Route::post('settings/calendars/{calendar}/publish', [CalendarController::class, 'publish'])->name('calendars.publish');
     Route::delete('settings/calendars/{calendar}/publish', [CalendarController::class, 'unpublish'])->name('calendars.unpublish');
+
+    Route::get('settings/booking', [BookingSettingsController::class, 'edit'])->name('booking-settings.edit');
+    Route::put('settings/booking', [BookingSettingsController::class, 'update'])->name('booking-settings.update');
 
     Route::get('settings/templates', [EventTemplateController::class, 'edit'])->name('event-templates.edit');
     Route::post('settings/templates', [EventTemplateController::class, 'store'])->name('event-templates.store');

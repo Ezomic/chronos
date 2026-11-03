@@ -163,6 +163,7 @@ class GoogleCalendarService implements CalendarSource
             'starts_at' => $startsAt,
             'ends_at' => $endsAt,
             'all_day' => $allDay,
+            'is_free' => ($event['transparency'] ?? null) === 'transparent',
             'timezone' => $timezone,
         ];
     }

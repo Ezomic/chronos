@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BookingController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EventController;
@@ -27,6 +28,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
 Route::get('feeds/{token}.ics', [PublishedCalendarController::class, 'show'])
     ->middleware('throttle:30,1')
     ->name('feeds.show');
+
+// Public by design: visitors book without an account. Each route is limited
+// per address, and the links into one booking are signed.
+Route::get('book', [BookingController::class, 'index'])
+    ->middleware('throttle:booking-view')
+    ->name('book.index');
+Route::post('book', [BookingController::class, 'store'])
+    ->middleware('throttle:booking-create')
+    ->name('book.store');
+Route::get('book/booking/{booking}', [BookingController::class, 'manage'])
+    ->middleware(['throttle:booking-view', 'signed'])
+    ->name('book.manage');
+Route::post('book/booking/{booking}/cancel', [BookingController::class, 'cancel'])
+    ->middleware(['throttle:booking-cancel', 'signed'])
+    ->name('book.cancel');
 
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';
