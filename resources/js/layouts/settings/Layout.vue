@@ -7,6 +7,7 @@ import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { toUrl } from '@/lib/utils';
 import { index as apiTokensIndex } from '@/routes/api-tokens';
 import { edit as editAppearance } from '@/routes/appearance';
+import { edit as editBooking } from '@/routes/booking-settings';
 import { edit as editCalendars } from '@/routes/calendars';
 import { edit as editTemplates } from '@/routes/event-templates';
 import { edit as editProfile } from '@/routes/profile';
@@ -29,6 +30,10 @@ const sidebarNavItems: NavItem[] = [
     {
         title: 'Calendars',
         href: editCalendars(),
+    },
+    {
+        title: 'Booking',
+        href: editBooking(),
     },
     {
         title: 'Templates',

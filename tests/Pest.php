@@ -1,7 +1,17 @@
 <?php
 
+use App\Actions\EnsureBookingTypeAction;
+use App\Models\Booking;
+use App\Models\BookingType;
+use App\Models\Calendar;
+use App\Models\Event;
+use App\Models\User;
 use App\Services\Calendar\HostResolver;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Mail;
+use Symfony\Component\Mime\Email;
 use Tests\TestCase;
 
 /*
@@ -64,4 +74,91 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+/** The calendar owner the public page books against: the first user. */
+function bookingOwner(): User
+{
+    return User::factory()->create(['name' => 'Owner', 'email' => 'owner@example.test']);
+}
+
+function introCall(User $owner): BookingType
+{
+    return app(EnsureBookingTypeAction::class)->handle($owner);
+}
+
+/** Monday 2 Nov 2026, 08:00 in Amsterdam: a quiet start to a normal week. */
+function atMondayMorning(): void
+{
+    test()->travelTo(CarbonImmutable::parse('2026-11-02 08:00', 'Europe/Amsterdam'));
+}
+
+/** @return Collection<int, CarbonImmutable> */
+function bookableSlots(string $query = ''): Collection
+{
+    $slots = [];
+
+    test()->get('/book'.$query)->assertOk()->assertInertia(function ($page) use (&$slots) {
+        $slots = $page->toArray()['props']['slots'];
+    });
+
+    return collect($slots)->map(fn (string $slot) => CarbonImmutable::parse($slot));
+}
+
+function localSlot(string $local): string
+{
+    return CarbonImmutable::parse($local, 'Europe/Amsterdam')->utc()->format('Y-m-d\TH:i:s\Z');
+}
+
+/** @param array<string, mixed> $overrides */
+function bookingPayload(string $local = '2026-11-04 10:00', array $overrides = []): array
+{
+    return [
+        'starts_at' => localSlot($local),
+        'name' => 'Jane Visitor',
+        'email' => 'jane@example.test',
+        'note' => 'Would like to talk about a project',
+        'timezone' => 'Europe/London',
+        ...$overrides,
+    ];
+}
+
+/** @param array<string, mixed> $attributes */
+function blockingEvent(User $owner, string $from, string $to, array $attributes = []): Event
+{
+    $calendar = $owner->calendars()->first() ?? Calendar::factory()->for($owner)->create();
+
+    return Event::factory()->for($calendar)->create([
+        'starts_at' => CarbonImmutable::parse($from, 'Europe/Amsterdam')->utc(),
+        'ends_at' => CarbonImmutable::parse($to, 'Europe/Amsterdam')->utc(),
+        ...$attributes,
+    ]);
+}
+
+/** @return Collection<int, Email> */
+function sentEmails(): Collection
+{
+    return collect(Mail::getSymfonyTransport()->messages())
+        ->map(fn ($sent) => $sent->getOriginalMessage());
+}
+
+function emailTo(string $address): ?Email
+{
+    return sentEmails()->first(
+        fn (Email $email) => collect($email->getTo())->contains(fn ($a) => $a->getAddress() === $address),
+    );
+}
+
+function manageUrlFrom(Email $email): string
+{
+    preg_match('#https?://[^\s"<>]+/book/booking/[^\s"<>]+#', (string) $email->getTextBody(), $matches);
+
+    return html_entity_decode($matches[0]);
+}
+
+function bookedSlot(string $local = '2026-11-04 10:00'): Booking
+{
+    test()->post('/book', bookingPayload($local))->assertRedirect();
+
+    return Booking::query()->latest('id')->firstOrFail();
 }

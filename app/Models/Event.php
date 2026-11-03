@@ -20,6 +20,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon $starts_at
  * @property Carbon $ends_at
  * @property bool $all_day
+ * @property bool $is_free
  * @property string $timezone
  * @property string|null $rrule
  * @property int|null $overrides_event_id
@@ -43,6 +44,7 @@ use Illuminate\Support\Carbon;
     'starts_at',
     'ends_at',
     'all_day',
+    'is_free',
     'timezone',
     'rrule',
     'overrides_event_id',
@@ -110,6 +112,7 @@ class Event extends Model
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
             'all_day' => 'boolean',
+            'is_free' => 'boolean',
             'overrides_starts_at' => 'datetime',
             'excluded_dates' => 'array',
         ];

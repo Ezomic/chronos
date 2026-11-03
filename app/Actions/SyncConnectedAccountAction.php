@@ -151,6 +151,7 @@ class SyncConnectedAccountAction
                     'starts_at' => $event['starts_at'],
                     'ends_at' => $event['ends_at'],
                     'all_day' => $event['all_day'],
+                    'is_free' => $event['is_free'] ?? false,
                     'timezone' => $event['timezone'],
                     'external_etag' => $event['external_etag'],
                 ],
