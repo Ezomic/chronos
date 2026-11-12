@@ -95,6 +95,27 @@ it('accepts a booking without a note', function () {
     expect(Booking::first()->guest_note)->toBeNull();
 });
 
+it('stores an optional phone number and tells the owner, not the visitor', function () {
+    $this->post('/book', bookingPayload('2026-11-04 10:00', ['phone' => ' +31 6 1234 5678 ']))->assertRedirect();
+
+    expect(Booking::first()->guest_phone)->toBe('+31 6 1234 5678')
+        ->and(Booking::first()->event->description)->toContain('Phone: +31 6 1234 5678')
+        ->and((string) emailTo('owner@example.test')->getTextBody())->toContain('+31 6 1234 5678')
+        ->and((string) emailTo('jane@example.test')->getTextBody())->not->toContain('+31 6 1234 5678');
+});
+
+it('accepts a booking without a phone number', function () {
+    $this->post('/book', bookingPayload('2026-11-04 10:00', ['phone' => '']))->assertRedirect();
+
+    expect(Booking::first()->guest_phone)->toBeNull();
+});
+
+it('rejects a phone number that is not a phone number', function (string $phone) {
+    $this->post('/book', bookingPayload('2026-11-04 10:00', ['phone' => $phone]))->assertSessionHasErrors('phone');
+
+    expect(Booking::count())->toBe(0);
+})->with(['letters' => 'call me maybe', 'too short' => '123', 'too long' => '+31 6 1234 5678 1234 5678 1234 5678']);
+
 it('drops a note that is only punctuation', function () {
     $this->post('/book', bookingPayload('2026-11-04 10:00', ['note' => '  ?!...--  ']))->assertRedirect();
 

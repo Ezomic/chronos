@@ -16,6 +16,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon $ends_at
  * @property string $guest_name
  * @property string $guest_email
+ * @property string|null $guest_phone
  * @property string|null $guest_note
  * @property string $guest_timezone
  * @property string $locale
@@ -32,6 +33,7 @@ use Illuminate\Support\Carbon;
     'ends_at',
     'guest_name',
     'guest_email',
+    'guest_phone',
     'guest_note',
     'guest_timezone',
     'locale',

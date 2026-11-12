@@ -28,6 +28,7 @@ class BookingReceivedMail extends BookingMail
             with: [
                 'name' => $this->booking->guest_name,
                 'email' => $this->booking->guest_email,
+                'phone' => $this->booking->guest_phone,
                 'note' => $this->booking->guest_note,
                 'when' => $this->startsAtIn($this->booking->typeOrFail()->timezone),
                 'manageUrl' => app(BookingLinks::class)->manage($this->booking),

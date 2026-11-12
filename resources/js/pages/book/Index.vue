@@ -31,6 +31,7 @@ const form = useForm({
     starts_at: '',
     name: '',
     email: '',
+    phone: '',
     note: '',
     timezone: detected,
     website: '',
@@ -281,6 +282,18 @@ const otherLanguage = computed(() => props.copy.language_code as BookingLocale);
                         autocomplete="email"
                     />
                     <InputError :message="form.errors.email" />
+                </div>
+
+                <div class="grid gap-2">
+                    <Label for="phone">{{ copy.phone }}</Label>
+                    <Input
+                        id="phone"
+                        v-model="form.phone"
+                        type="tel"
+                        maxlength="30"
+                        autocomplete="tel"
+                    />
+                    <InputError :message="form.errors.phone" />
                 </div>
 
                 <div class="grid gap-2">

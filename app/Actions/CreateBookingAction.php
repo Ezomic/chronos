@@ -34,12 +34,13 @@ class CreateBookingAction
         CarbonImmutable $startsAt,
         string $name,
         string $email,
+        ?string $phone,
         ?string $note,
         string $timezone,
         string $locale,
     ): Booking {
         try {
-            $booking = DB::transaction(fn (): Booking => $this->book($type, $startsAt, $name, $email, $note, $timezone, $locale));
+            $booking = DB::transaction(fn (): Booking => $this->book($type, $startsAt, $name, $email, $phone, $note, $timezone, $locale));
         } catch (UniqueConstraintViolationException) {
             // Two visitors passed the check together; the unique slot key let
             // exactly one of them through.
@@ -57,6 +58,7 @@ class CreateBookingAction
         CarbonImmutable $startsAt,
         string $name,
         string $email,
+        ?string $phone,
         ?string $note,
         string $timezone,
         string $locale,
@@ -80,7 +82,7 @@ class CreateBookingAction
             endsAt: $endsAt,
             allDay: false,
             timezone: $type->timezone,
-            description: $this->description($email, $note),
+            description: $this->description($email, $phone, $note),
         );
 
         return Booking::query()->create([
@@ -91,6 +93,7 @@ class CreateBookingAction
             'ends_at' => $endsAt,
             'guest_name' => $name,
             'guest_email' => $email,
+            'guest_phone' => $phone,
             'guest_note' => $note,
             'guest_timezone' => $timezone,
             'locale' => $locale,
@@ -111,11 +114,12 @@ class CreateBookingAction
         );
     }
 
-    private function description(string $email, ?string $note): string
+    private function description(string $email, ?string $phone, ?string $note): string
     {
         return implode("\n", array_filter([
             'Booked through the public booking page.',
             'Email: '.$email,
+            $phone !== null ? 'Phone: '.$phone : null,
             $note !== null ? 'Note: '.$note : null,
         ]));
     }
