@@ -4,6 +4,9 @@
     <p>{{ __('booking.mail.received.intro', ['name' => $name]) }}</p>
     <p style="font-size: 18px; font-weight: bold;">{{ $when }}</p>
     <p>{{ __('booking.mail.received.email') }}: {{ $email }}</p>
+    @if ($phone)
+        <p>{{ __('booking.mail.received.phone') }}: {{ $phone }}</p>
+    @endif
     @if ($note)
         <p>{{ __('booking.mail.received.note') }}: {{ $note }}</p>
     @endif

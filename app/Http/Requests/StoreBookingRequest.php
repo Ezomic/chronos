@@ -27,6 +27,7 @@ class StoreBookingRequest extends FormRequest
         'starts_at' => ['required', 'string', 'date_format:Y-m-d\TH:i:s\Z'],
         'name' => ['required', 'string', 'max:100', 'regex:/[\p{L}\p{N}]/u'],
         'email' => ['required', 'string', 'max:254', 'email:rfc'],
+        'phone' => ['nullable', 'string', 'max:30', 'regex:/^\+?[0-9 ().\-]{6,30}$/'],
         'note' => ['nullable', 'string', 'max:300', 'not_regex:/[\r\n]/'],
         'timezone' => ['required', 'string', 'timezone:all'],
         'website' => ['prohibited'],
@@ -80,8 +81,21 @@ class StoreBookingRequest extends FormRequest
         return is_string($note) && preg_match('/[\p{L}\p{N}]/u', $note) === 1 ? trim($note) : null;
     }
 
+    public function phone(): ?string
+    {
+        $phone = $this->input('phone');
+
+        return is_string($phone) && trim($phone) !== '' ? trim($phone) : null;
+    }
+
     protected function prepareForValidation(): void
     {
+        $phone = $this->input('phone');
+
+        if (is_string($phone)) {
+            $this->merge(['phone' => trim($phone)]);
+        }
+
         $name = $this->input('name');
 
         if (is_string($name)) {

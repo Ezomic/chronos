@@ -59,6 +59,7 @@ class BookingController extends Controller
                 startsAt: $request->startsAt(),
                 name: $request->string('name')->toString(),
                 email: $request->string('email')->toString(),
+                phone: $request->phone(),
                 note: $request->note(),
                 timezone: $request->string('timezone')->toString(),
                 locale: $locale,
