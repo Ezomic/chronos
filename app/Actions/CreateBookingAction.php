@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\Enums\BookingWebhookEvent;
 use App\Exceptions\SlotUnavailableException;
 use App\Mail\BookingConfirmedMail;
 use App\Mail\BookingReceivedMail;
@@ -24,6 +25,7 @@ class CreateBookingAction
     public function __construct(
         private readonly SlotFinder $finder,
         private readonly CreateEventAction $createEvent,
+        private readonly QueueBookingWebhookAction $queueWebhook,
     ) {}
 
     /**
@@ -49,6 +51,8 @@ class CreateBookingAction
 
         Mail::to($booking->guest_email)->locale($locale)->queue(new BookingConfirmedMail($booking));
         Mail::to($type->ownerOrFail()->email)->locale('en')->queue(new BookingReceivedMail($booking));
+
+        $this->queueWebhook->handle($booking, BookingWebhookEvent::Created);
 
         return $booking;
     }

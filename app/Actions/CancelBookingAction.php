@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\Enums\BookingWebhookEvent;
 use App\Mail\BookingCancelledMail;
 use App\Models\Booking;
 use Carbon\CarbonImmutable;
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\Mail;
 
 class CancelBookingAction
 {
+    public function __construct(private readonly QueueBookingWebhookAction $queueWebhook) {}
+
     /**
      * Cancels the booking, frees its slot and removes its event. A booking
      * that is already cancelled is left alone, so a second click or a retried
@@ -38,6 +41,8 @@ class CancelBookingAction
             $booking->refresh();
 
             Mail::to($booking->typeOrFail()->ownerOrFail()->email)->locale('en')->queue(new BookingCancelledMail($booking));
+
+            $this->queueWebhook->handle($booking, BookingWebhookEvent::Cancelled);
         }
 
         return $cancelled;
