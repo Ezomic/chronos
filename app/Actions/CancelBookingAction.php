@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Mail;
 
 class CancelBookingAction
 {
+    public function __construct(private readonly QueueBookingWebhookAction $queueWebhook) {}
+
     /**
      * Cancels the booking, frees its slot and removes its event. A booking
      * that is already cancelled is left alone, so a second click or a retried
@@ -36,6 +38,8 @@ class CancelBookingAction
 
         if ($cancelled) {
             $booking->refresh();
+
+            $this->queueWebhook->handle($booking);
 
             Mail::to($booking->typeOrFail()->ownerOrFail()->email)->locale('en')->queue(new BookingCancelledMail($booking));
         }
