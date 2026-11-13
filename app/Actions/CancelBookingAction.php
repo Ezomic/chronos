@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
-use App\Enums\BookingWebhookEvent;
 use App\Mail\BookingCancelledMail;
 use App\Models\Booking;
 use Carbon\CarbonImmutable;
@@ -40,9 +39,9 @@ class CancelBookingAction
         if ($cancelled) {
             $booking->refresh();
 
-            Mail::to($booking->typeOrFail()->ownerOrFail()->email)->locale('en')->queue(new BookingCancelledMail($booking));
+            $this->queueWebhook->handle($booking);
 
-            $this->queueWebhook->handle($booking, BookingWebhookEvent::Cancelled);
+            Mail::to($booking->typeOrFail()->ownerOrFail()->email)->locale('en')->queue(new BookingCancelledMail($booking));
         }
 
         return $cancelled;

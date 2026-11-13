@@ -2,6 +2,7 @@
 
 use App\Actions\CancelBookingAction;
 use App\Models\Booking;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function () {
@@ -126,4 +127,12 @@ it('reports a booking the CMS refuses, carries on with the rest, and fails', fun
 
     expect(cmsWebhookRequests())->toHaveCount(3)
         ->and(Booking::query()->count())->toBe(3);
+});
+
+it('reports a CMS it cannot reach and fails', function () {
+    Http::fake(['*' => fn () => throw new ConnectionException('cURL error 7: Failed to connect')]);
+
+    $this->artisan('chronos:push-bookings', ['booking' => [$this->first->uuid]])
+        ->expectsOutputToContain('Failed to connect')
+        ->assertFailed();
 });

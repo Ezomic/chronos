@@ -6,7 +6,9 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\URL;
 
@@ -229,6 +231,63 @@ it('still books when the CMS fails and jobs run inline', function () {
     $this->post(signedCancelUrl($booking))->assertRedirect();
 
     expect($booking->fresh()->cancelled_at)->not->toBeNull();
+});
+
+it('still books when the queue cannot take the job, and reports it', function () {
+    Exceptions::fake();
+
+    // A proxy around the real bus: the mails still go through it untouched.
+    $bus = Mockery::mock(Bus::getFacadeRoot());
+    $bus->shouldReceive('dispatch')->andThrow(new RuntimeException('queue is down'));
+    Bus::swap($bus);
+
+    $this->post('/book', bookingPayload())->assertRedirect()->assertSessionHasNoErrors();
+    $booking = Booking::query()->firstOrFail();
+    $this->post(signedCancelUrl($booking))->assertRedirect();
+
+    expect($booking->fresh()->cancelled_at)->not->toBeNull()
+        ->and(emailTo('jane@example.test'))->not->toBeNull();
+
+    Exceptions::assertReported(fn (RuntimeException $e) => $e->getMessage() === 'queue is down');
+});
+
+it('never tells the CMS a cancelled booking was created, whatever order the tries land in', function () {
+    Http::fake(['*' => Http::sequence()->pushStatus(500)->pushStatus(204)->pushStatus(204)]);
+    queueToDatabase();
+
+    $booking = bookedSlot();
+    drainQueue();
+
+    $this->post(signedCancelUrl($booking))->assertRedirect();
+    $this->travel(2)->minutes();
+    drainQueue();
+
+    $bodies = cmsWebhookRequests()->map(fn ($request) => cmsWebhookBody($request));
+
+    expect($bodies)->toHaveCount(3)
+        ->and($bodies[0]['event'])->toBe('booking.created')
+        ->and($bodies[0]['booking']['cancelled_at'])->toBeNull()
+        ->and($bodies[1]['event'])->toBe('booking.cancelled')
+        ->and($bodies[2]['event'])->toBe('booking.cancelled')
+        ->and($bodies[1]['booking']['cancelled_at'])->not->toBeNull()
+        ->and($bodies[2]['booking']['cancelled_at'])->toBe($bodies[1]['booking']['cancelled_at'])
+        ->and(DB::table('jobs')->count())->toBe(0);
+});
+
+it('does not follow redirects and gives up on a slow CMS quickly', function () {
+    $options = [];
+
+    Http::fake(function ($request, array $sent) use (&$options) {
+        $options = $sent;
+
+        return Http::response(status: 204);
+    });
+
+    bookedSlot();
+
+    expect($options['allow_redirects'])->toBeFalse()
+        ->and($options['connect_timeout'])->toBe(5)
+        ->and($options['timeout'])->toBe(10);
 });
 
 it('delivers on a later try with a fresh timestamp and signature', function () {

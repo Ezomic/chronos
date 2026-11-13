@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
-use App\Enums\BookingWebhookEvent;
 use App\Jobs\SendBookingWebhookJob;
 use App\Models\Booking;
 use Illuminate\Support\Facades\Bus;
@@ -17,10 +16,10 @@ class QueueBookingWebhookAction
      * the visitor's request: not a queue that cannot take the job, and not a
      * sync queue that runs it on the spot against a CMS that is down.
      */
-    public function handle(Booking $booking, BookingWebhookEvent $event): void
+    public function handle(Booking $booking): void
     {
         try {
-            Bus::dispatch(new SendBookingWebhookJob($booking, $event));
+            Bus::dispatch(new SendBookingWebhookJob($booking));
         } catch (Throwable $e) {
             report($e);
         }
