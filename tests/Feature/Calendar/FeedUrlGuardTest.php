@@ -143,3 +143,54 @@ it('refuses a feed larger than the size cap', function () {
 
     expect(ConnectedAccount::query()->count())->toBe(0);
 });
+
+it('refuses a bracketed IPv6 literal that points inside', function (string $url) {
+    // The real resolver: an IP literal is answered without any DNS lookup.
+    app()->instance(HostResolver::class, new HostResolver);
+    Http::fake();
+
+    subscribe($url)->assertSessionHasErrors('url');
+
+    Http::assertNothingSent();
+    expect(ConnectedAccount::query()->count())->toBe(0);
+})->with([
+    'loopback' => 'http://[::1]:6379/',
+    'mapped loopback' => 'http://[::ffff:127.0.0.1]:8080/admin',
+    'mapped metadata address' => 'http://[::ffff:a9fe:a9fe]/latest/meta-data/',
+]);
+
+it('refuses a host that resolves to no address at all', function () {
+    resolvingTo([]);
+    Http::fake();
+
+    subscribe('https://sneaky.example/calendar.ics')->assertSessionHasErrors('url');
+
+    Http::assertNothingSent();
+});
+
+it('refuses the carrier-grade NAT range', function (string $address) {
+    resolvingTo([$address]);
+    Http::fake();
+
+    subscribe('https://sneaky.example/calendar.ics')->assertSessionHasErrors('url');
+
+    Http::assertNothingSent();
+})->with(['100.64.0.1', '100.100.100.100', '100.127.255.254']);
+
+it('pins the connection to the addresses it checked', function () {
+    resolvingTo(['93.184.216.34', '2606:2800:220:1::1']);
+
+    $pinned = null;
+
+    Http::fake(function ($request, array $options) use (&$pinned) {
+        $pinned = $options['curl'][CURLOPT_RESOLVE] ?? null;
+
+        return Http::response(implode("\r\n", [
+            'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Test//EN', 'X-WR-CALNAME:Fixtures', 'END:VCALENDAR',
+        ])."\r\n");
+    });
+
+    subscribe('https://feeds.example/calendar.ics')->assertSessionHasNoErrors();
+
+    expect($pinned)->toBe(['feeds.example:443:93.184.216.34,[2606:2800:220:1::1]']);
+});
