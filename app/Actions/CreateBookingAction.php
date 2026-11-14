@@ -24,6 +24,7 @@ class CreateBookingAction
     public function __construct(
         private readonly SlotFinder $finder,
         private readonly CreateEventAction $createEvent,
+        private readonly QueueBookingWebhookAction $queueWebhook,
     ) {}
 
     /**
@@ -46,6 +47,8 @@ class CreateBookingAction
             // exactly one of them through.
             throw new SlotUnavailableException;
         }
+
+        $this->queueWebhook->handle($booking);
 
         Mail::to($booking->guest_email)->locale($locale)->queue(new BookingConfirmedMail($booking));
         Mail::to($type->ownerOrFail()->email)->locale('en')->queue(new BookingReceivedMail($booking));

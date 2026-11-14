@@ -9,7 +9,9 @@ use App\Models\User;
 use App\Services\Calendar\HostResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Symfony\Component\Mime\Email;
 use Tests\TestCase;
@@ -161,4 +163,37 @@ function bookedSlot(string $local = '2026-11-04 10:00'): Booking
     test()->post('/book', bookingPayload($local))->assertRedirect();
 
     return Booking::query()->latest('id')->firstOrFail();
+}
+
+const CMS_WEBHOOK_SECRET = 'test-cms-secret-9f2c1d';
+
+function configureCmsWebhook(?string $url = 'https://cms.example.test', ?string $secret = CMS_WEBHOOK_SECRET): void
+{
+    config(['services.cms.webhook_url' => $url, 'services.cms.webhook_secret' => $secret]);
+}
+
+/** @return Collection<int, Request> */
+function cmsWebhookRequests(): Collection
+{
+    return Http::recorded()->map(fn (array $pair): Request => $pair[0])->values();
+}
+
+/**
+ * Recomputes the signature from the bytes the fake recorded, independently of
+ * the code under test.
+ */
+function expectSignedCmsWebhook(Request $request, string $secret = CMS_WEBHOOK_SECRET): void
+{
+    $timestamp = $request->header('X-Chronos-Timestamp')[0] ?? '';
+    $signature = $request->header('X-Chronos-Signature')[0] ?? '';
+
+    expect($timestamp)->toMatch('/^\d{10}$/')
+        ->and($signature)->toMatch('/^[0-9a-f]{64}$/')
+        ->and(hash_equals(hash_hmac('sha256', $timestamp.'.'.$request->body(), $secret), $signature))->toBeTrue();
+}
+
+/** @return array{event: string, booking: array<string, mixed>} */
+function cmsWebhookBody(Request $request): array
+{
+    return json_decode($request->body(), true, flags: JSON_THROW_ON_ERROR);
 }

@@ -59,4 +59,11 @@ return [
         'portal_cache_ttl' => (int) env('THIJSSENSOFTWARE_ID_PORTAL_TTL', 300),
     ],
 
+    // The portfolio CMS keeps a copy of every booking. Both values must be
+    // set, or nothing is sent.
+    'cms' => [
+        'webhook_url' => env('CMS_WEBHOOK_URL'),
+        'webhook_secret' => env('CMS_WEBHOOK_SECRET'),
+    ],
+
 ];
