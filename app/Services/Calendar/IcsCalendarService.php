@@ -106,19 +106,25 @@ class IcsCalendarService implements CalendarSource
     /**
      * Fetch a feed without letting it reach anything but the public internet.
      * Redirects are followed by hand so each hop is checked the same way as the
-     * URL the user gave us, and the body is read against a cap so a hostile
-     * feed cannot stream until memory runs out.
+     * URL the user gave us, and each connection is pinned to the addresses the
+     * guard checked, so DNS cannot answer differently between check and connect.
+     * The download is aborted once it passes the cap, so a hostile feed cannot
+     * stream until memory or disk runs out. That needs curl, which Guzzle only
+     * uses when the response is not streamed.
      */
     private function fetch(string $feedUrl): string
     {
         $url = $feedUrl;
 
         for ($hop = 0; $hop <= self::MAX_REDIRECTS; $hop++) {
-            $this->guard->assertFetchable($url);
+            $addresses = $this->guard->assertFetchable($url);
 
             $response = Http::timeout(15)
                 ->withoutRedirecting()
-                ->withOptions(['stream' => true])
+                ->withOptions([
+                    'curl' => $this->pinnedTo($url, $addresses),
+                    'progress' => fn (int $total, int $downloaded): bool => $downloaded > self::MAX_BYTES,
+                ])
                 ->withHeaders(['User-Agent' => 'Chronos Calendar'])
                 ->get($url);
 
@@ -132,6 +138,28 @@ class IcsCalendarService implements CalendarSource
         }
 
         throw new RuntimeException('Feed redirected more than '.self::MAX_REDIRECTS.' times.');
+    }
+
+    /**
+     * An IP literal is connected to as written, so only a hostname needs pinning.
+     *
+     * @param  array<int, string>  $addresses
+     * @return array<int, list<string>>
+     */
+    private function pinnedTo(string $url, array $addresses): array
+    {
+        $host = (string) parse_url($url, PHP_URL_HOST);
+
+        if (filter_var(trim($host, '[]'), FILTER_VALIDATE_IP) !== false) {
+            return [];
+        }
+
+        $port = parse_url($url, PHP_URL_PORT)
+            ?? (strtolower((string) parse_url($url, PHP_URL_SCHEME)) === 'https' ? 443 : 80);
+
+        $pinned = array_map(fn (string $address): string => str_contains($address, ':') ? "[{$address}]" : $address, $addresses);
+
+        return [CURLOPT_RESOLVE => ["{$host}:{$port}:".implode(',', $pinned)]];
     }
 
     /**

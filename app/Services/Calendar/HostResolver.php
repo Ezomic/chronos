@@ -16,6 +16,11 @@ class HostResolver
      */
     public function resolve(string $host): array
     {
+        // parse_url keeps the brackets around an IPv6 literal: "[::1]".
+        if (str_starts_with($host, '[') && str_ends_with($host, ']')) {
+            $host = substr($host, 1, -1);
+        }
+
         if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
             return [$host];
         }
