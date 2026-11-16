@@ -14,7 +14,9 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::middleware(['auth'])->group(function () {
-    Route::redirect('settings', '/settings/profile');
+    // Not Route::redirect: since Laravel 13.36 that matches the QUERY verb too, and Wayfinder's
+    // generated RedirectController.ts then fails vue-tsc, which has no "query" method type.
+    Route::get('settings', fn () => redirect('/settings/profile'));
 
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');
